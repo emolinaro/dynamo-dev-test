@@ -1,0 +1,36 @@
+kubectl apply -f vllm-agg_qwen_audio_e_pd.yaml
+
+kubectl -n dynamo-system port-forward svc/vllm-agg-qwen-audio-frontend 8000:8000 &
+
+curl -s http://127.0.0.1:8000/v1/models | head
+
+curl -sS http://127.0.0.1:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d @- <<'EOF'
+{
+  "model": "Qwen/Qwen2-Audio-7B-Instruct",
+  "messages": [
+    {
+      "role": "system",
+      "content": [
+        { "type": "text", "text": "You are a helpful assistant." }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "audio_url",
+          "audio_url": {
+            "url": "https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen2-Audio/audio/glass-breaking-151256.mp3"
+          }
+        },
+        { "type": "text", "text": "What's that sound?" }
+      ]
+    }
+  ],
+  "max_tokens": 256,
+  "temperature": 0.1,
+  "stream": false
+}
+EOF

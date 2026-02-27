@@ -1,0 +1,101 @@
+apiVersion: nvidia.com/v1alpha1
+kind: DynamoGraphDeployment
+metadata:
+  namespace: dynamo-system
+  name: vllm-agg-qwen-audio
+spec:
+  envs:
+  - name: UCX_TLS
+    value: "tcp,cuda_copy,cuda_ipc"
+  - name: UCX_LOG_LEVEL
+    value: "info"
+  - name: UCX_NET_DEVICES
+    value: "eth0"
+  - name: UCX_TCP_IF_EXCLUDE
+    value: "lo,docker0,cni0"
+  - name: UCX_SOCKADDR_TLS_PRIORITY
+    value: "sockcm"
+  - name: UCX_SOCKADDR_IFADDR
+    value: "eth0"
+
+#  envs:
+   # TCP is preferred for multimodal workloads (avoids NATS payload limits, etc.)
+#    - name: DYN_REQUEST_PLANE
+#      value: "tcp"
+
+  backendFramework: vllm
+
+  services:
+    Frontend:
+      componentType: frontend
+      replicas: 1
+      extraPodSpec:
+        mainContainer:
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.8.1
+
+    # 1) Processor (Python) - HTTP entry, tokenization, routes to encoder
+    Processor:
+      envFromSecret: hf-token-secret
+      componentType: worker
+      replicas: 1
+      resources:
+        limits:
+          gpu: "1"
+      extraPodSpec:
+        runtimeClassName: nvidia
+        nodeSelector:
+          ucloud.dk/gpu: "true"
+        mainContainer:
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.8.1
+          workingDir: /workspace/examples/multimodal
+          command:
+            - /bin/sh
+            - -lc
+          args:
+            - |
+              python3 -m pip install -q librosa && \
+              python3 components/processor.py \
+                --model Qwen/Qwen2-Audio-7B-Instruct \
+                --prompt-template $'<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\nAudio 1: <|audio_bos|><|AUDIO|><|audio_eos|>\n<prompt><|im_end|>\n<|im_start|>assistant\n'
+
+    # 2) Audio Encode Worker - decodes audio -> embeddings
+    AudioEncodeWorker:
+      envFromSecret: hf-token-secret
+      componentType: worker
+      replicas: 1
+      resources:
+        limits:
+          gpu: "1"
+      extraPodSpec:
+        runtimeClassName: nvidia
+        nodeSelector:
+          ucloud.dk/gpu: "true"
+        mainContainer:
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.8.1
+          workingDir: /workspace/examples/multimodal
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - python3 -m pip install -q librosa; python3 components/audio_encode_worker.py --model Qwen/Qwen2-Audio-7B-Instruct --gpu-memory-utilization "0.85"
+
+    # 3) PD Worker - prefill + decode (aggregated serving path)
+    PDWorker:
+      envFromSecret: hf-token-secret
+      componentType: worker
+      replicas: 1
+      resources:
+        limits:
+          gpu: "1"
+      extraPodSpec:
+        runtimeClassName: nvidia
+        nodeSelector:
+          ucloud.dk/gpu: "true"
+        mainContainer:
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.8.1
+          workingDir: /workspace/examples/multimodal
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - python3 -m pip install -q librosa; python3 components/worker.py --model Qwen/Qwen2-Audio-7B-Instruct --gpu-memory-utilization "0.85" --max-model-len "8192" --worker-type prefill

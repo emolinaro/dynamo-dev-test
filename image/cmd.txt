@@ -1,0 +1,44 @@
+kubectl apply -f vllm-agg_llava.yaml
+
+kubectl -n dynamo-system port-forward svc/vllm-agg-llava-frontend 8000:8000 &
+
+curl -sS http://127.0.0.1:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "llava-hf/llava-1.5-7b-hf",
+    "messages": [{
+      "role": "user",
+      "content": [
+        { "type": "image_url", "image_url": { "url": "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/transformers/tasks/ai2d-demo.jpg" } },
+        { "type": "text", "text": "What does the label 15 represent? (1) lava (2) core (3) tunnel (4) ash cloud" }
+      ]
+    }],
+    "max_tokens": 256,
+    "temperature": 0.1,
+    "stream": false
+  }' | head -c 2000
+
+
+kubectl apply -f vllm-agg_qwen_vision_e_pd.yaml
+
+kubectl -n dynamo-system port-forward svc/vllm-agg-qwen-vision-frontend 8000:8000 &
+
+curl -s http://127.0.0.1:8000/v1/models | head
+
+curl -sS http://127.0.0.1:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "Qwen/Qwen2.5-VL-7B-Instruct",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          { "type": "text", "text": "Describe this image." },
+          { "type": "image_url", "image_url": { "url": "https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen-VL/assets/demo.jpeg" } }
+        ]
+      }
+    ],
+    "max_tokens": 256,
+    "temperature": 0.1,
+    "stream": false
+  }' | head -c 2000

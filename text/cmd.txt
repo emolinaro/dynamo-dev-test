@@ -1,0 +1,15 @@
+kubectl apply -f vllm-agg.yaml
+
+kubectl -n dynamo-system port-forward svc/vllm-agg-frontend 8000:8000 &
+
+curl -s http://127.0.0.1:8000/v1/models | head
+
+curl -s http://127.0.0.1:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "Qwen/Qwen3-0.6B",
+    "messages": [{"role":"user","content":"Say hello in one short sentence."}],
+    "temperature": 0.2,
+    "max_tokens": 64
+  }' | head -c 2000
+echo

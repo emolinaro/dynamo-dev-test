@@ -1,0 +1,121 @@
+apiVersion: nvidia.com/v1alpha1
+kind: DynamoGraphDeployment
+metadata:
+  namespace: dynamo-system
+  name: vllm-agg-qwen-vision
+spec:
+  envs:
+  - name: UCX_TLS
+    value: "tcp,cuda_copy,cuda_ipc"
+  - name: UCX_LOG_LEVEL
+    value: "info"
+  - name: UCX_NET_DEVICES
+    value: "eth0"
+  - name: UCX_TCP_IF_EXCLUDE
+    value: "lo,docker0,cni0"
+  - name: UCX_SOCKADDR_TLS_PRIORITY
+    value: "sockcm"
+  - name: UCX_SOCKADDR_IFADDR
+    value: "eth0"
+  # Limit concurrency when downloading models from Hugging Face
+#  - name: HF_HUB_ENABLE_HF_TRANSFER
+#    value: "0"
+#  - name: HF_HUB_DISABLE_PROGRESS_BARS
+#    value: "1" 
+
+  backendFramework: vllm
+
+  services:
+    Frontend:
+      componentType: frontend
+      replicas: 1
+      extraPodSpec:
+        mainContainer:
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.8.1
+
+    # 1) Processor (Python) - HTTP entry, tokenization, routes to encoder
+    Processor:
+      envFromSecret: hf-token-secret
+      componentType: worker
+      replicas: 1
+      resources:
+        limits:
+          gpu: "1"
+      extraPodSpec:
+        runtimeClassName: nvidia
+        nodeSelector:
+          ucloud.dk/gpu: "true"
+        mainContainer:
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.8.1
+          workingDir: /workspace/examples/backends/vllm
+          command:
+            - /bin/sh
+            - -lc
+          args:
+            - |
+              python3 -m dynamo.vllm \
+                --multimodal-processor \
+                --enable-multimodal \
+                --model \
+                Qwen/Qwen2.5-VL-7B-Instruct \
+                --mm-prompt-template $'<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|><prompt><|im_end|>\n<|im_start|>assistant\n'
+
+    # 2)  Encode Worker - encode images/videos -> embeddings
+    EncodeWorker:
+      envFromSecret: hf-token-secret
+      componentType: worker
+      replicas: 1
+      resources:
+        limits:
+          gpu: "1"
+      extraPodSpec:
+        runtimeClassName: nvidia
+        nodeSelector:
+          ucloud.dk/gpu: "true"
+        mainContainer:
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.8.1
+          workingDir: /workspace/examples/backends/vllm
+          command:
+            - python3
+            - -m
+            - dynamo.vllm
+          args:
+            - --multimodal-encode-worker 
+            - --enable-multimodal 
+            - --model
+            - Qwen/Qwen2.5-VL-7B-Instruct
+            - --gpu-memory-utilization 
+            - "0.85" 
+            - --max-model-len 
+            - "4096"
+
+    # 3) PD Worker - prefill + decode (aggregated serving path)
+    PDWorker:
+      envFromSecret: hf-token-secret
+      componentType: worker
+      replicas: 1
+      resources:
+        limits:
+          gpu: "1"
+      extraPodSpec:
+        runtimeClassName: nvidia
+        nodeSelector:
+          ucloud.dk/gpu: "true"
+        mainContainer:
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.8.1
+          workingDir: /workspace/examples/backends/vllm
+          command:
+            - python3
+            - -m
+            - dynamo.vllm
+          args:
+            - --multimodal-worker 
+            - --enable-multimodal 
+            - --enable-mm-embeds
+            - --model
+            - Qwen/Qwen2.5-VL-7B-Instruct
+            - --gpu-memory-utilization 
+            - "0.85" 
+            - --max-model-len 
+            - "4096"
+

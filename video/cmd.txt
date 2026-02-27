@@ -1,0 +1,22 @@
+kubectl apply -f vllm-agg_llava_video_e_pd.yaml
+
+kubectl -n dynamo-system port-forward svc/vllm-agg-llava-video-frontend 8000:8000 &
+
+curl -s http://127.0.0.1:8000/v1/models | head
+
+curl -sS http://127.0.0.1:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "llava-hf/LLaVA-NeXT-Video-7B-hf",
+    "messages": [{
+      "role": "user",
+      "content": [
+        { "type": "text", "text": "Describe this video." },
+        { "type": "video_url", "video_url": { "url": "https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen2-VL/space_woaudio.mp4" } }
+      ]
+    }],
+    "max_tokens": 256,
+    "temperature": 0.1,
+    "stream": false
+  }'
+

@@ -1,0 +1,105 @@
+apiVersion: nvidia.com/v1alpha1
+kind: DynamoGraphDeployment
+metadata:
+  namespace: dynamo-system
+  name: vllm-agg-llava-video
+spec:
+  envs:
+  - name: UCX_TLS
+    value: "tcp,cuda_copy,cuda_ipc"
+  - name: UCX_LOG_LEVEL
+    value: "info"
+  - name: UCX_NET_DEVICES
+    value: "eth0"
+  - name: UCX_TCP_IF_EXCLUDE
+    value: "lo,docker0,cni0"
+  - name: UCX_SOCKADDR_TLS_PRIORITY
+    value: "sockcm"
+  - name: UCX_SOCKADDR_IFADDR
+    value: "eth0"
+  # Limit concurrency when downloading models from Hugging Face
+#  - name: HF_HUB_ENABLE_HF_TRANSFER
+#    value: "0"
+#  - name: HF_HUB_DISABLE_PROGRESS_BARS
+#    value: "1" 
+
+  backendFramework: vllm
+
+  services:
+    Frontend:
+      componentType: frontend
+      replicas: 1
+      extraPodSpec:
+        mainContainer:
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.8.1
+
+    # 1) Processor (Python) - HTTP entry, tokenization, routes to encoder
+    Processor:
+      envFromSecret: hf-token-secret
+      componentType: worker
+      replicas: 1
+      resources:
+        limits:
+          gpu: "1"
+      extraPodSpec:
+        runtimeClassName: nvidia
+        nodeSelector:
+          ucloud.dk/gpu: "true"
+        mainContainer:
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.8.1
+          workingDir: /workspace/examples/multimodal
+          command:
+            - /bin/sh
+            - -lc
+          args:
+            - |
+              python3 components/processor.py \
+                --model \
+                llava-hf/LLaVA-NeXT-Video-7B-hf \
+                --prompt-template $'USER: <video>\n<prompt> ASSISTANT:'
+
+    # 2)  Encode Worker - encode images/videos -> embeddings
+    EncodeWorker:
+      envFromSecret: hf-token-secret
+      componentType: worker
+      replicas: 1
+      resources:
+        limits:
+          gpu: "1"
+      extraPodSpec:
+        runtimeClassName: nvidia
+        nodeSelector:
+          ucloud.dk/gpu: "true"
+        mainContainer:
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.8.1
+          workingDir: /workspace/examples/multimodal
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - |
+              python3 components/video_encode_worker.py --model llava-hf/LLaVA-NeXT-Video-7B-hf --num-frames-to-sample "8"
+
+    # 3) PD Worker - prefill + decode (aggregated serving path)
+    PDWorker:
+      envFromSecret: hf-token-secret
+      componentType: worker
+      replicas: 1
+      resources:
+        limits:
+          gpu: "1"
+      extraPodSpec:
+        runtimeClassName: nvidia
+        nodeSelector:
+          ucloud.dk/gpu: "true"
+        mainContainer:
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.8.1
+          workingDir: /workspace/examples/multimodal
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - |
+              python3 -m pip install -q numpy==2.2.0 opencv-python-headless==4.10.0.84 && \
+              python3 components/worker.py --model llava-hf/LLaVA-NeXT-Video-7B-hf --worker-type prefill --gpu-memory-utilization "0.85" --max-model-len "8192"
+

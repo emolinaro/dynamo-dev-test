@@ -1,0 +1,51 @@
+apiVersion: nvidia.com/v1alpha1
+kind: DynamoGraphDeployment
+metadata:
+  namespace: dynamo-system
+  name: vllm-agg-llava
+spec:
+  envs:
+  # TCP is preferred for multimodal workloads because it overcomes:
+  # - NATS default 1MB max payload limit (multimodal base64 images can exceed this)
+  - name: DYN_REQUEST_PLANE
+    value: "tcp"
+  backendFramework: vllm
+  services:
+    Frontend:
+      componentType: frontend
+      replicas: 1
+      extraPodSpec:
+        # optional: keep frontend off GPU node by omitting nodeSelector
+        mainContainer:
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.8.1
+    VLMWorker:
+      envFromSecret: hf-token-secret
+      componentType: worker
+      replicas: 1
+      resources:
+        limits:
+          gpu: "1"
+      extraPodSpec:
+        runtimeClassName: nvidia
+        nodeSelector:
+          ucloud.dk/gpu: "true"
+        mainContainer:
+          # Multimodal data (images) are decoded in the backend worker using ImageLoader
+          # --connector none: No KV transfer needed for aggregated serving
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.9.0
+          workingDir: /workspace/examples/backends/vllm
+          command:
+            - python3
+            - -m
+            - dynamo.vllm
+          args:
+            - --enable-multimodal
+            - --model 
+            - llava-hf/llava-1.5-7b-hf 
+            - --connector 
+            - none
+            - --gpu-memory-utilization 
+            - "0.85" 
+            - --max-model-len 
+            - "2048"
+
