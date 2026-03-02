@@ -36,6 +36,8 @@ Each modality lives in its own folder and includes:
 - A Hugging Face token Kubernetes secret referenced by the manifests:
   - `hf-token-secret`
 
+> **Install instructions:** For full steps to install Dynamo (CRDs, platform Helm chart), create the Hugging Face token secret, check GPU nodes, run post-install checks, and rollback if needed, see **[INSTALL_INSTRUCTIONS.md](INSTALL_INSTRUCTIONS.md)**.
+
 > Note: Some multimodal examples prefer TCP request plane to avoid payload limits (see the image LLaVA manifest comments and `DYN_REQUEST_PLANE` usage).
 >
 > If UCX / RDMA is not available in your environment (for example, `nixl` cannot find RDMA devices), you can safely fall back to **TCP-only UCX** by setting the UCX-related env vars in the manifests (as shown in the Qwen vision/audio/video examples) so that UCX uses `tcp` instead of attempting RDMA transports.
