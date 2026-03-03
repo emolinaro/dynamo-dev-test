@@ -13,6 +13,22 @@ Each modality lives in its own folder and includes:
 - A `cmd.txt` with a minimal deploy + port-forward + test `curl`
 - One or more `DynamoGraphDeployment` YAML manifests
 
+**This repository targets the first scenario below** (Kubernetes + Dynamo operator + DGD).
+
+## Deployment scenarios
+
+Dynamo can be deployed in two main ways:
+
+| Scenario | Use case | Characteristics |
+|----------|----------|-----------------|
+| **Kubernetes (Dynamo operator + DGD)** | Production-style cluster deployments | **Declarative deployments** via `DynamoGraphDeployment` (DGD) and `DynamoGraphDeploymentRequest` (DGDR). Autoscaling adapters, metrics integration (e.g. Prometheus), operator-managed lifecycle. This repo’s manifests and profiler follow this model. |
+| **Kubernetes + GAIE/kGateway (Inference Gateway)** | K8s-native ingress + token-aware KV routing at the gateway | **Token-aware KV routing** in the gateway EPP; **header-based deterministic routing** to backends; aligns with the **Gateway API** model. Suited when routing and request affinity are handled at the ingress/gateway layer rather than purely by the operator. |
+
+- **Scenario 1** is what the examples in this repo assume: apply DGD/DGDR manifests, use the Dynamo operator, and optionally run the profiler for disaggregated SLA tuning.
+- **Scenario 2** adds an inference gateway (GAIE/kGateway) in front of the cluster for gateway-level routing and token-aware behavior; it complements rather than replaces DGD-based deployments.
+
+For more detail, see **[DEPLOYMENT_SCENARIOS.md](DEPLOYMENT_SCENARIOS.md)**.
+
 ## Repository layout
 
 - `text/`
