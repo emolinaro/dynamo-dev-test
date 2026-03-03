@@ -1,0 +1,32 @@
+# Profiler workflow: create ConfigMap, run DGDR, inspect results
+# The profiler runs only with disaggregated deployments (decode + prefill); use disagg.yaml as input.
+# Prerequisites: Dynamo installed, hf-token-secret in namespace, GPU nodes
+
+export NAMESPACE=dynamo-system
+
+# 1) Create ConfigMap from disagg.yaml (used by DGDR profilingConfig)
+kubectl create configmap qwen-config \
+  --from-file=disagg.yaml=disagg.yaml \
+  --namespace $NAMESPACE \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+# Or apply the pre-rendered ConfigMap directly:
+# kubectl apply -f disagg-configmap.yaml
+
+# 2) Submit a profiling request (pick one)
+# With AiConfigurator (recommended for H100):
+kubectl apply -f profile_sla_aic_dgdr.yaml
+# Without AiConfigurator (online sweep only):
+# kubectl apply -f profile_sla_online_dgdr.yaml
+
+# 3) Tail profiler job logs
+kubectl logs -f job/profile-qwen-sla-aic -n $NAMESPACE
+
+# 4) Inspect outputs
+kubectl get configmap dgdr-output-qwen-sla-aic -n $NAMESPACE -o yaml
+
+kubectl get configmap planner-profile-data -n $NAMESPACE -o yaml
+
+# 5) Extract DGD (DynamoGraphDeployment) from planner output
+kubectl get configmap dgdr-output-qwen-sla-aic -n $NAMESPACE \
+  -o jsonpath='{.data.config_with_planner\.yaml}' | yq 'select(.kind=="DynamoGraphDeployment")'

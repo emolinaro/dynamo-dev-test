@@ -6,6 +6,7 @@ Kubernetes manifests and quick commands for deploying **NVIDIA AI Dynamo** graph
 - Image/Vision (LLaVA 1.5, Qwen2.5-VL)
 - Audio (Qwen2-Audio)
 - Video (LLaVA-NeXT-Video)
+- **Profiler**: SLA profiling and AiConfigurator-based DGDR (DynamoGraphDeploymentRequest) for Qwen3-0.6B — **runs only with disaggregated** (decode + prefill) deployments
 
 Each modality lives in its own folder and includes:
 
@@ -27,6 +28,13 @@ Each modality lives in its own folder and includes:
 - `video/`
   - `vllm-agg_llava_video_e_pd.yaml`: LLaVA-NeXT-Video with processor + encode + PD workers
   - `cmd.txt`: deploy + sample video chat request
+- `profiler/`
+  - Profiler runs **only with disaggregated** deployments (decode + prefill); aggregated graphs are not profiled.
+  - `disagg.yaml`: disaggregated vLLM graph (Frontend + decode + prefill workers) used as profiling input
+  - `disagg-configmap.yaml`: ConfigMap embedding `disagg.yaml` (key `disagg.yaml`) for DGDR `configMapRef`
+  - `profile_sla_aic_dgdr.yaml`: DynamoGraphDeploymentRequest for SLA profiling with AiConfigurator (H100)
+  - `profile_sla_online_dgdr.yaml`: DynamoGraphDeploymentRequest for SLA profiling without AiConfigurator
+  - `cmd.txt`: create ConfigMap, apply DGDR, tail job logs, extract DGD from output
 
 ## Prerequisites
 

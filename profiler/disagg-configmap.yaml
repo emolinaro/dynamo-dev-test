@@ -1,0 +1,70 @@
+apiVersion: v1
+data:
+  disagg.yaml: |
+    # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+    # SPDX-License-Identifier: Apache-2.0
+
+    apiVersion: nvidia.com/v1alpha1
+    kind: DynamoGraphDeployment
+    metadata:
+      name: vllm-disagg
+      namespace: dynamo-system
+    spec:
+      services:
+        Frontend:
+          componentType: frontend
+          replicas: 1
+          extraPodSpec:
+            mainContainer:
+              image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.8.1
+        VllmDecodeWorker:
+          envFromSecret: hf-token-secret
+          componentType: worker
+          subComponentType: decode
+          replicas: 1
+          resources:
+            limits:
+              gpu: "1"
+          extraPodSpec:
+            runtimeClassName: nvidia
+            nodeSelector:
+              ucloud.dk/gpu: "true"
+            mainContainer:
+              image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.8.1
+              workingDir: /workspace/examples/backends/vllm
+              command:
+              - python3
+              - -m
+              - dynamo.vllm
+              args:
+                - --model
+                - Qwen/Qwen3-0.6B
+                - --is-decode-worker
+        VllmPrefillWorker:
+          envFromSecret: hf-token-secret
+          componentType: worker
+          subComponentType: prefill
+          replicas: 1
+          resources:
+            limits:
+              gpu: "1"
+          extraPodSpec:
+            runtimeClassName: nvidia
+            nodeSelector:
+              ucloud.dk/gpu: "true"
+            mainContainer:
+              image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.8.1
+              workingDir: /workspace/examples/backends/vllm
+              command:
+              - python3
+              - -m
+              - dynamo.vllm
+              args:
+                - --model
+                - Qwen/Qwen3-0.6B
+                - --is-prefill-worker
+kind: ConfigMap
+metadata:
+  name: qwen-config
+  namespace: dynamo-system
+
