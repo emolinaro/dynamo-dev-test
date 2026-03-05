@@ -6,7 +6,7 @@ Kubernetes manifests and quick commands for deploying **NVIDIA AI Dynamo** graph
 - Image/Vision (LLaVA 1.5, Qwen2.5-VL)
 - Audio (Qwen2-Audio)
 - Video (LLaVA-NeXT-Video)
-- **Profiler**: SLA profiling and AiConfigurator-based DGDR (DynamoGraphDeploymentRequest) for Qwen3-0.6B — **runs only with disaggregated** (decode + prefill) deployments
+- Profiler: SLA profiling and AiConfigurator-based DGDR (DynamoGraphDeploymentRequest) for Qwen3-0.6B — **runs only with disaggregated** (decode + prefill) deployments
 
 Each modality lives in its own folder and includes:
 
@@ -60,7 +60,7 @@ For more detail and a **comparison table** (local file-KV, Compose, K8s operator
 - A Hugging Face token Kubernetes secret referenced by the manifests:
   - `hf-token-secret`
 
-> **Install instructions:** For full steps to install Dynamo (CRDs, platform Helm chart), create the Hugging Face token secret, check GPU nodes, run post-install checks, and rollback if needed, see **[INSTALL_INSTRUCTIONS.md](INSTALL_INSTRUCTIONS.md)**.
+> **Install instructions:** **INSTALL_INSTRUCTIONS.md** walks through installing the Dynamo platform for the **Kubernetes + Dynamo operator + DGD** scenario: CRDs + platform Helm chart, creating the Hugging Face token secret, checking GPU nodes, running post-install checks, and rolling back if needed. Run these once per cluster before applying the manifests in this repo.
 
 > Note: Some multimodal examples prefer TCP request plane to avoid payload limits (see the image LLaVA manifest comments and `DYN_REQUEST_PLANE` usage).
 >
