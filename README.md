@@ -27,7 +27,7 @@ Dynamo can be deployed in two main ways:
 - **Scenario 1** is what the examples in this repo assume: apply DGD/DGDR manifests, use the Dynamo operator, and optionally run the profiler for disaggregated SLA tuning.
 - **Scenario 2** adds an inference gateway (GAIE/kGateway) in front of the cluster for gateway-level routing and token-aware behavior; it complements rather than replaces DGD-based deployments.
 
-For more detail, see **[DEPLOYMENT_SCENARIOS.md](DEPLOYMENT_SCENARIOS.md)**.
+For more detail and a **comparison table** (local file-KV, Compose, K8s operator-managed, disaggregated RDMA, GAIE/kGateway), see **[DEPLOYMENT_SCENARIOS.md](DEPLOYMENT_SCENARIOS.md)**.
 
 ## Repository layout
 
