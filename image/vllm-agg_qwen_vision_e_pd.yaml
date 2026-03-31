@@ -34,37 +34,7 @@ spec:
         mainContainer:
           image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1
 
-    # 1) Processor (Python) - HTTP entry, tokenization, routes to encoder
-    Processor:
-      envFromSecret: hf-token-secret
-      componentType: worker
-      replicas: 1
-      resources:
-        limits:
-          gpu: "1"
-        requests:
-          custom:
-            ephemeral-storage: "2Gi"
-      extraPodSpec:
-        runtimeClassName: nvidia
-        nodeSelector:
-          ucloud.dk/gpu: "true"
-        mainContainer:
-          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1
-          workingDir: /workspace/examples/backends/vllm
-          command:
-            - /bin/sh
-            - -lc
-          args:
-            - |
-              python3 -m dynamo.vllm \
-                --multimodal-processor \
-                --enable-multimodal \
-                --model \
-                Qwen/Qwen2.5-VL-7B-Instruct \
-                --mm-prompt-template $'<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|><prompt><|im_end|>\n<|im_start|>assistant\n'
-
-    # 2)  Encode Worker - encode images/videos -> embeddings
+    # 1) Encode worker: generates multimodal embeddings
     EncodeWorker:
       envFromSecret: hf-token-secret
       componentType: worker
@@ -87,16 +57,17 @@ spec:
             - -m
             - dynamo.vllm
           args:
-            - --multimodal-encode-worker 
-            - --enable-multimodal 
+            - --multimodal-encode-worker
+            - --enable-multimodal
             - --model
             - Qwen/Qwen2.5-VL-7B-Instruct
-            - --gpu-memory-utilization 
-            - "0.85" 
-            - --max-model-len 
+            - --gpu-memory-utilization
+            - "0.85"
+            - --max-model-len
             - "4096"
 
-    # 3) PD Worker - prefill + decode (aggregated serving path)
+    # 2) Aggregated PD worker: frontend routes image requests here,
+    # and the worker forwards embedding work to EncodeWorker.
     PDWorker:
       envFromSecret: hf-token-secret
       componentType: worker
@@ -119,12 +90,12 @@ spec:
             - -m
             - dynamo.vllm
           args:
-            - --multimodal-worker 
-            - --enable-multimodal 
+            - --route-to-encoder
+            - --enable-multimodal
             - --enable-mm-embeds
             - --model
             - Qwen/Qwen2.5-VL-7B-Instruct
-            - --gpu-memory-utilization 
-            - "0.85" 
-            - --max-model-len 
+            - --gpu-memory-utilization
+            - "0.85"
+            - --max-model-len
             - "4096"

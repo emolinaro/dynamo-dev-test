@@ -35,7 +35,8 @@ spec:
           ucloud.dk/gpu: "true"
         mainContainer:
           # Multimodal data (images) are decoded in the backend worker using ImageLoader
-          # --connector none: No KV transfer needed for aggregated serving
+          # The vLLM backend no longer accepts --connector; aggregated serving uses
+          # the default no-connector behavior automatically.
           image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1
           workingDir: /workspace/examples/backends/vllm
           command:
@@ -46,8 +47,6 @@ spec:
             - --enable-multimodal
             - --model 
             - llava-hf/llava-1.5-7b-hf 
-            - --connector 
-            - none
             - --gpu-memory-utilization 
             - "0.85" 
             - --max-model-len 
