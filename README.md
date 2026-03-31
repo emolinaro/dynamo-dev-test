@@ -7,6 +7,7 @@ Kubernetes manifests and quick commands for deploying **NVIDIA AI Dynamo** graph
 - Audio (Qwen2-Audio)
 - Video (LLaVA-NeXT-Video)
 - Profiler: SLA profiling examples for rapid and thorough DGDR (DynamoGraphDeploymentRequest) runs against Qwen3-0.6B — **runs only with disaggregated** (decode + prefill) deployments
+- GenAI: doc-based scaffolding for generation workflows from the current Dynamo docs, including text-to-image, text-to-video, image-to-video, and diffusion examples
 
 Each modality lives in its own folder and includes:
 
@@ -31,25 +32,28 @@ For more detail and a **comparison table** (local file-KV, Compose, K8s operator
 
 ## Repository layout
 
-- `text/`
+- `Text/`
   - `vllm-agg.yaml`: single-worker text deployment
   - `cmd.txt`: deploy + sample OpenAI-compatible request
-- `image/`
+- `Image/`
   - `vllm-agg_llava.yaml`: LLaVA image chat
   - `vllm-agg_qwen_vision_e_pd.yaml`: Qwen2.5-VL with processor + encode + PD workers
   - `cmd.txt`: deploy + sample image chat requests
-- `audio/`
+- `Audio/`
   - `vllm-agg_qwen_audio_e_pd.yaml`: Qwen2-Audio with processor + audio encode + PD workers
   - `cmd.txt`: deploy + sample audio chat request
-- `video/`
+- `Video/`
   - `vllm-agg_llava_video_e_pd.yaml`: LLaVA-NeXT-Video with processor + encode + PD workers
   - `cmd.txt`: deploy + sample video chat request
-- `profiler/`
+- `Profiler/`
   - Profiler runs **only with disaggregated** deployments (decode + prefill); aggregated graphs are not profiled.
   - `disagg.yaml`: disaggregated vLLM graph (Frontend + decode + prefill workers) updated to `vllm-runtime:1.0.1`
   - `profile_sla_aic_dgdr.yaml`: `nvidia.com/v1beta1` DGDR using `searchStrategy: rapid`
   - `profile_sla_online_dgdr.yaml`: `nvidia.com/v1beta1` DGDR using `searchStrategy: thorough`
   - `cmd.txt`: apply DGDR, watch request state, tail profiler job logs, and inspect the generated DGD
+- `GenAI/`
+  - doc-oriented scaffold for generation workflows discussed in the current Dynamo docs
+  - `text-to-image/`, `text-to-video/`, `text-to-audio/`, `text-to-text/`, `image-to-video/`, `llm-diffusion/`, `fastvideo/`, `trtllm-video-diffusion/`
 
 ## Prerequisites
 
@@ -69,10 +73,10 @@ For more detail and a **comparison table** (local file-KV, Compose, K8s operator
 
 Pick a modality folder and run the commands in its `cmd.txt`.
 
-Example (text):
+Example (`Text`):
 
 ```bash
-cd text
+cd Text
 kubectl apply -f vllm-agg.yaml
 kubectl -n dynamo-system port-forward svc/<deployment-name>-frontend 8000:8000 &
 curl -s http://127.0.0.1:8000/v1/models | head

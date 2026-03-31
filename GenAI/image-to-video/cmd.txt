@@ -1,0 +1,28 @@
+# Official commands from the Dynamo docs / upstream launch scripts.
+
+# vLLM-Omni image-to-video
+bash examples/backends/vllm/launch/agg_omni_i2v.sh
+
+curl -s http://localhost:8000/v1/videos \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "Wan-AI/Wan2.2-TI2V-5B-Diffusers",
+    "prompt": "A bear playing with yarn, smooth motion",
+    "input_reference": "https://example.com/bear.png",
+    "size": "832x480",
+    "response_format": "url",
+    "nvext": {
+      "num_inference_steps": 40,
+      "num_frames": 33,
+      "guidance_scale": 1.0,
+      "boundary_ratio": 0.875,
+      "guidance_scale_2": 1.0,
+      "seed": 42
+    }
+  }'
+
+# SGLang note:
+# The official docs state that the video generation worker supports both T2V
+# and I2V, but the published request example is T2V-only. Reuse the
+# text-to-video launch path and confirm the current request schema upstream
+# before adding a repo-local test request here.

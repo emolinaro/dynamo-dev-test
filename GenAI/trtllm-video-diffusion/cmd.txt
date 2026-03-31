@@ -1,0 +1,18 @@
+# Official commands from the Dynamo docs.
+
+python -m dynamo.trtllm \
+  --modality video_diffusion \
+  --model-path Wan-AI/Wan2.1-T2V-1.3B-Diffusers \
+  --media-output-fs-url file:///tmp/dynamo_media
+
+curl -s -X POST http://localhost:8000/v1/videos \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "A cat playing piano",
+    "model": "wan_t2v",
+    "seconds": 4,
+    "size": "832x480",
+    "nvext": {
+      "fps": 24
+    }
+  }'

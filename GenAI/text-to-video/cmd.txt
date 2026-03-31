@@ -1,0 +1,38 @@
+# Official commands from the Dynamo docs / upstream launch scripts.
+# These are not yet adapted into Kubernetes manifests in this repo.
+
+# vLLM-Omni text-to-video
+bash examples/backends/vllm/launch/agg_omni_video.sh
+
+curl -s http://localhost:8000/v1/videos \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+    "prompt": "A drone flyover of a mountain landscape",
+    "seconds": 2,
+    "size": "832x480",
+    "response_format": "url"
+  }'
+
+# SGLang video generation
+cd $DYNAMO_HOME/examples/backends/sglang
+./launch/text-to-video-diffusion.sh
+
+curl -s http://localhost:8000/v1/videos \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "A curious raccoon exploring a garden",
+    "model": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+    "seconds": 2,
+    "size": "832x480",
+    "response_format": "url",
+    "nvext": {
+      "fps": 8,
+      "num_frames": 17,
+      "num_inference_steps": 50
+    }
+  }'
+
+# See also:
+# - ../fastvideo/cmd.txt
+# - ../trtllm-video-diffusion/cmd.txt
