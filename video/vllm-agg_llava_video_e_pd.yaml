@@ -27,11 +27,12 @@ spec:
 
   services:
     Frontend:
+      envFromSecret: hf-token-secret
       componentType: frontend
       replicas: 1
       extraPodSpec:
         mainContainer:
-          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.8.1
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1
 
     # 1) Processor (Python) - HTTP entry, tokenization, routes to encoder
     Processor:
@@ -41,12 +42,15 @@ spec:
       resources:
         limits:
           gpu: "1"
+        requests:
+          custom:
+            ephemeral-storage: "2Gi"
       extraPodSpec:
         runtimeClassName: nvidia
         nodeSelector:
           ucloud.dk/gpu: "true"
         mainContainer:
-          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.8.1
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1
           workingDir: /workspace/examples/multimodal
           command:
             - /bin/sh
@@ -66,16 +70,19 @@ spec:
       resources:
         limits:
           gpu: "1"
+        requests:
+          custom:
+            ephemeral-storage: "2Gi"
       extraPodSpec:
         runtimeClassName: nvidia
         nodeSelector:
           ucloud.dk/gpu: "true"
         mainContainer:
-          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.8.1
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1
           workingDir: /workspace/examples/multimodal
           command:
             - /bin/sh
-            - -c
+            - -lc
           args:
             - |
               python3 components/video_encode_worker.py --model llava-hf/LLaVA-NeXT-Video-7B-hf --num-frames-to-sample "8"
@@ -88,18 +95,20 @@ spec:
       resources:
         limits:
           gpu: "1"
+        requests:
+          custom:
+            ephemeral-storage: "2Gi"
       extraPodSpec:
         runtimeClassName: nvidia
         nodeSelector:
           ucloud.dk/gpu: "true"
         mainContainer:
-          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.8.1
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1
           workingDir: /workspace/examples/multimodal
           command:
             - /bin/sh
-            - -c
+            - -lc
           args:
             - |
               python3 -m pip install -q numpy==2.2.0 opencv-python-headless==4.10.0.84 && \
               python3 components/worker.py --model llava-hf/LLaVA-NeXT-Video-7B-hf --worker-type prefill --gpu-memory-utilization "0.85" --max-model-len "8192"
-

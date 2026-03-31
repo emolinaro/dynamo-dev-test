@@ -27,11 +27,12 @@ spec:
 
   services:
     Frontend:
+      envFromSecret: hf-token-secret
       componentType: frontend
       replicas: 1
       extraPodSpec:
         mainContainer:
-          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.8.1
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1
 
     # 1) Processor (Python) - HTTP entry, tokenization, routes to encoder
     Processor:
@@ -41,12 +42,15 @@ spec:
       resources:
         limits:
           gpu: "1"
+        requests:
+          custom:
+            ephemeral-storage: "2Gi"
       extraPodSpec:
         runtimeClassName: nvidia
         nodeSelector:
           ucloud.dk/gpu: "true"
         mainContainer:
-          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.8.1
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1
           workingDir: /workspace/examples/multimodal
           command:
             - /bin/sh
@@ -66,18 +70,25 @@ spec:
       resources:
         limits:
           gpu: "1"
+        requests:
+          custom:
+            ephemeral-storage: "2Gi"
       extraPodSpec:
         runtimeClassName: nvidia
         nodeSelector:
           ucloud.dk/gpu: "true"
         mainContainer:
-          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.8.1
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1
           workingDir: /workspace/examples/multimodal
           command:
             - /bin/sh
-            - -c
+            - -lc
           args:
-            - python3 -m pip install -q librosa; python3 components/audio_encode_worker.py --model Qwen/Qwen2-Audio-7B-Instruct --gpu-memory-utilization "0.85"
+            - |
+              python3 -m pip install -q librosa && \
+              python3 components/audio_encode_worker.py \
+                --model Qwen/Qwen2-Audio-7B-Instruct \
+                --gpu-memory-utilization "0.85"
 
     # 3) PD Worker - prefill + decode (aggregated serving path)
     PDWorker:
@@ -87,15 +98,24 @@ spec:
       resources:
         limits:
           gpu: "1"
+        requests:
+          custom:
+            ephemeral-storage: "2Gi"
       extraPodSpec:
         runtimeClassName: nvidia
         nodeSelector:
           ucloud.dk/gpu: "true"
         mainContainer:
-          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.8.1
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1
           workingDir: /workspace/examples/multimodal
           command:
             - /bin/sh
-            - -c
+            - -lc
           args:
-            - python3 -m pip install -q librosa; python3 components/worker.py --model Qwen/Qwen2-Audio-7B-Instruct --gpu-memory-utilization "0.85" --max-model-len "8192" --worker-type prefill
+            - |
+              python3 -m pip install -q librosa && \
+              python3 components/worker.py \
+                --model Qwen/Qwen2-Audio-7B-Instruct \
+                --gpu-memory-utilization "0.85" \
+                --max-model-len "8192" \
+                --worker-type prefill

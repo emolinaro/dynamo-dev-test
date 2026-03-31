@@ -12,12 +12,13 @@ spec:
   backendFramework: vllm
   services:
     Frontend:
+      envFromSecret: hf-token-secret
       componentType: frontend
       replicas: 1
       extraPodSpec:
         # optional: keep frontend off GPU node by omitting nodeSelector
         mainContainer:
-          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.8.1
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1
     VLMWorker:
       envFromSecret: hf-token-secret
       componentType: worker
@@ -25,6 +26,9 @@ spec:
       resources:
         limits:
           gpu: "1"
+        requests:
+          custom:
+            ephemeral-storage: "2Gi"
       extraPodSpec:
         runtimeClassName: nvidia
         nodeSelector:
@@ -32,7 +36,7 @@ spec:
         mainContainer:
           # Multimodal data (images) are decoded in the backend worker using ImageLoader
           # --connector none: No KV transfer needed for aggregated serving
-          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.9.0
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1
           workingDir: /workspace/examples/backends/vllm
           command:
             - python3
@@ -48,4 +52,3 @@ spec:
             - "0.85" 
             - --max-model-len 
             - "2048"
-

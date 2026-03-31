@@ -1,5 +1,7 @@
 kubectl apply -f vllm-agg.yaml
 
+kubectl -n dynamo-system get dynamographdeployment vllm-agg
+
 kubectl -n dynamo-system port-forward svc/vllm-agg-frontend 8000:8000 &
 
 curl -s http://127.0.0.1:8000/v1/models | head

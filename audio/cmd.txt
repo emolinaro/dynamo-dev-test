@@ -1,5 +1,7 @@
 kubectl apply -f vllm-agg_qwen_audio_e_pd.yaml
 
+kubectl -n dynamo-system get dynamographdeployment vllm-agg-qwen-audio
+
 kubectl -n dynamo-system port-forward svc/vllm-agg-qwen-audio-frontend 8000:8000 &
 
 curl -s http://127.0.0.1:8000/v1/models | head

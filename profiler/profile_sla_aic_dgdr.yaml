@@ -1,4 +1,4 @@
-apiVersion: nvidia.com/v1alpha1
+apiVersion: nvidia.com/v1beta1
 kind: DynamoGraphDeploymentRequest
 metadata:
   name: qwen-sla-aic
@@ -6,30 +6,83 @@ metadata:
 spec:
   model: Qwen/Qwen3-0.6B
   backend: vllm
+  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1
+  searchStrategy: rapid
   autoApply: true
-
-  profilingConfig:
-    profilerImage: "nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.8.1"
-    configMapRef:
-      name: qwen-config
-      key: disagg.yaml  # Must match the key used in --from-file
-    config:
-      sla:
-        isl: 4000
-        osl: 500
-        ttft: 600
-        itl: 25
-      hardware:
-        numGpusPerNode: 4
-        minNumGpusPerEngine: 1
-        maxNumGpusPerEngine: 4
-        gpuType: h100_sxm
-      sweep:
-        useAiConfigurator: true
-        aicSystem: h100_sxm
-        aicHfId: Qwen/Qwen3-0.6B
-        aicBackendVersion: "0.11.0"
-
-  deploymentOverrides:
-    workersImage: "nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.8.1"
-
+  workload:
+    isl: 4000
+    osl: 500
+  sla:
+    ttft: 600
+    itl: 25
+  hardware:
+    gpuSku: h100_sxm
+    numGpusPerNode: 4
+  overrides:
+    dgd:
+      apiVersion: nvidia.com/v1alpha1
+      kind: DynamoGraphDeployment
+      metadata:
+        name: qwen-sla-aic
+        namespace: dynamo-system
+      spec:
+        services:
+          Frontend:
+            envFromSecret: hf-token-secret
+            componentType: frontend
+            replicas: 1
+            extraPodSpec:
+              mainContainer:
+                image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1
+          VllmDecodeWorker:
+            envFromSecret: hf-token-secret
+            componentType: worker
+            subComponentType: decode
+            replicas: 1
+            resources:
+              limits:
+                gpu: "1"
+              requests:
+                custom:
+                  ephemeral-storage: "2Gi"
+            extraPodSpec:
+              runtimeClassName: nvidia
+              nodeSelector:
+                ucloud.dk/gpu: "true"
+              mainContainer:
+                image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1
+                workingDir: /workspace/examples/backends/vllm
+                command:
+                - python3
+                - -m
+                - dynamo.vllm
+                args:
+                  - --model
+                  - Qwen/Qwen3-0.6B
+                  - --is-decode-worker
+          VllmPrefillWorker:
+            envFromSecret: hf-token-secret
+            componentType: worker
+            subComponentType: prefill
+            replicas: 1
+            resources:
+              limits:
+                gpu: "1"
+              requests:
+                custom:
+                  ephemeral-storage: "2Gi"
+            extraPodSpec:
+              runtimeClassName: nvidia
+              nodeSelector:
+                ucloud.dk/gpu: "true"
+              mainContainer:
+                image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1
+                workingDir: /workspace/examples/backends/vllm
+                command:
+                - python3
+                - -m
+                - dynamo.vllm
+                args:
+                  - --model
+                  - Qwen/Qwen3-0.6B
+                  - --is-prefill-worker

@@ -1,5 +1,7 @@
 kubectl apply -f vllm-agg_llava_video_e_pd.yaml
 
+kubectl -n dynamo-system get dynamographdeployment vllm-agg-llava-video
+
 kubectl -n dynamo-system port-forward svc/vllm-agg-llava-video-frontend 8000:8000 &
 
 curl -s http://127.0.0.1:8000/v1/models | head
@@ -18,5 +20,4 @@ curl -sS http://127.0.0.1:8000/v1/chat/completions \
     "max_tokens": 256,
     "temperature": 0.1,
     "stream": false
-  }'
-
+  }' | head -c 2000

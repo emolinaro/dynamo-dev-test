@@ -6,7 +6,7 @@ Kubernetes manifests and quick commands for deploying **NVIDIA AI Dynamo** graph
 - Image/Vision (LLaVA 1.5, Qwen2.5-VL)
 - Audio (Qwen2-Audio)
 - Video (LLaVA-NeXT-Video)
-- Profiler: SLA profiling and AiConfigurator-based DGDR (DynamoGraphDeploymentRequest) for Qwen3-0.6B — **runs only with disaggregated** (decode + prefill) deployments
+- Profiler: SLA profiling examples for rapid and thorough DGDR (DynamoGraphDeploymentRequest) runs against Qwen3-0.6B — **runs only with disaggregated** (decode + prefill) deployments
 
 Each modality lives in its own folder and includes:
 
@@ -46,11 +46,10 @@ For more detail and a **comparison table** (local file-KV, Compose, K8s operator
   - `cmd.txt`: deploy + sample video chat request
 - `profiler/`
   - Profiler runs **only with disaggregated** deployments (decode + prefill); aggregated graphs are not profiled.
-  - `disagg.yaml`: disaggregated vLLM graph (Frontend + decode + prefill workers) used as profiling input
-  - `disagg-configmap.yaml`: ConfigMap embedding `disagg.yaml` (key `disagg.yaml`) for DGDR `configMapRef`
-  - `profile_sla_aic_dgdr.yaml`: DynamoGraphDeploymentRequest for SLA profiling with AiConfigurator (H100)
-  - `profile_sla_online_dgdr.yaml`: DynamoGraphDeploymentRequest for SLA profiling without AiConfigurator
-  - `cmd.txt`: create ConfigMap, apply DGDR, tail job logs, extract DGD from output
+  - `disagg.yaml`: disaggregated vLLM graph (Frontend + decode + prefill workers) updated to `vllm-runtime:1.0.1`
+  - `profile_sla_aic_dgdr.yaml`: `nvidia.com/v1beta1` DGDR using `searchStrategy: rapid`
+  - `profile_sla_online_dgdr.yaml`: `nvidia.com/v1beta1` DGDR using `searchStrategy: thorough`
+  - `cmd.txt`: apply DGDR, watch request state, tail profiler job logs, and inspect the generated DGD
 
 ## Prerequisites
 
@@ -60,7 +59,7 @@ For more detail and a **comparison table** (local file-KV, Compose, K8s operator
 - A Hugging Face token Kubernetes secret referenced by the manifests:
   - `hf-token-secret`
 
-> **Install instructions:** **INSTALL_INSTRUCTIONS.md** walks through installing the Dynamo platform for the **Kubernetes + Dynamo operator + DGD** scenario: CRDs + platform Helm chart, creating the Hugging Face token secret, checking GPU nodes, running post-install checks, and rolling back if needed. Run these once per cluster before applying the manifests in this repo.
+> **Install instructions:** **INSTALL_INSTRUCTIONS.md** now covers both fresh install and platform upgrade to Dynamo `v1.0.1` for the **Kubernetes + Dynamo operator + DGD** scenario, including the Helm value changes needed to upgrade an older `0.8.1` deployment safely, post-upgrade checks, and rollback steps. Run that flow before applying the manifests in this repo.
 
 > Note: Some multimodal examples prefer TCP request plane to avoid payload limits (see the image LLaVA manifest comments and `DYN_REQUEST_PLANE` usage).
 >

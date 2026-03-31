@@ -9,11 +9,12 @@ metadata:
 spec:
   services:
     Frontend:
+      envFromSecret: hf-token-secret
       componentType: frontend
       replicas: 1
       extraPodSpec:
         mainContainer:
-          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.8.1
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1
     VllmDecodeWorker:
       envFromSecret: hf-token-secret
       componentType: worker
@@ -22,12 +23,15 @@ spec:
       resources:
         limits:
           gpu: "1"
+        requests:
+          custom:
+            ephemeral-storage: "2Gi"
       extraPodSpec:
         runtimeClassName: nvidia
         nodeSelector:
           ucloud.dk/gpu: "true"
         mainContainer:
-          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.8.1
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1
           workingDir: /workspace/examples/backends/vllm
           command:
           - python3
@@ -45,12 +49,15 @@ spec:
       resources:
         limits:
           gpu: "1"
+        requests:
+          custom:
+            ephemeral-storage: "2Gi"
       extraPodSpec:
         runtimeClassName: nvidia
         nodeSelector:
           ucloud.dk/gpu: "true"
         mainContainer:
-          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.8.1
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1
           workingDir: /workspace/examples/backends/vllm
           command:
           - python3

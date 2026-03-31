@@ -1,5 +1,7 @@
 kubectl apply -f vllm-agg_llava.yaml
 
+kubectl -n dynamo-system get dynamographdeployment vllm-agg-llava
+
 kubectl -n dynamo-system port-forward svc/vllm-agg-llava-frontend 8000:8000 &
 
 curl -sS http://127.0.0.1:8000/v1/chat/completions \
@@ -20,6 +22,8 @@ curl -sS http://127.0.0.1:8000/v1/chat/completions \
 
 
 kubectl apply -f vllm-agg_qwen_vision_e_pd.yaml
+
+kubectl -n dynamo-system get dynamographdeployment vllm-agg-qwen-vision
 
 kubectl -n dynamo-system port-forward svc/vllm-agg-qwen-vision-frontend 8000:8000 &
 
