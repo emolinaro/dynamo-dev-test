@@ -40,7 +40,10 @@ spec:
           args:
             - --model
             - Qwen/Qwen3-0.6B
-            - --is-decode-worker
+            - --disaggregation-mode
+            - decode
+            - --kv-transfer-config
+            - '{"kv_connector":"NixlConnector","kv_role":"kv_both"}'
     VllmPrefillWorker:
       envFromSecret: hf-token-secret
       componentType: worker
@@ -66,4 +69,7 @@ spec:
           args:
             - --model
             - Qwen/Qwen3-0.6B
-            - --is-prefill-worker
+            - --disaggregation-mode
+            - prefill
+            - --kv-transfer-config
+            - '{"kv_connector":"NixlConnector","kv_role":"kv_both"}'

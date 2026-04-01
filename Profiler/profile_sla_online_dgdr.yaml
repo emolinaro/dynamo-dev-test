@@ -17,6 +17,7 @@ spec:
     itl: 25
   hardware:
     gpuSku: h100_sxm
+    totalGpus: 4
     numGpusPerNode: 4
   overrides:
     dgd:
@@ -39,9 +40,8 @@ spec:
             componentType: worker
             subComponentType: decode
             replicas: 1
+            # Let the profiler choose GPUs per engine; only keep local storage requests here.
             resources:
-              limits:
-                gpu: "1"
               requests:
                 custom:
                   ephemeral-storage: "2Gi"
@@ -59,15 +59,17 @@ spec:
                 args:
                   - --model
                   - Qwen/Qwen3-0.6B
-                  - --is-decode-worker
+                  - --disaggregation-mode
+                  - decode
+                  - --kv-transfer-config
+                  - '{"kv_connector":"NixlConnector","kv_role":"kv_both"}'
           VllmPrefillWorker:
             envFromSecret: hf-token-secret
             componentType: worker
             subComponentType: prefill
             replicas: 1
+            # Let the profiler choose GPUs per engine; only keep local storage requests here.
             resources:
-              limits:
-                gpu: "1"
               requests:
                 custom:
                   ephemeral-storage: "2Gi"
@@ -85,4 +87,7 @@ spec:
                 args:
                   - --model
                   - Qwen/Qwen3-0.6B
-                  - --is-prefill-worker
+                  - --disaggregation-mode
+                  - prefill
+                  - --kv-transfer-config
+                  - '{"kv_connector":"NixlConnector","kv_role":"kv_both"}'

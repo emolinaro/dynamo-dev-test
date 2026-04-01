@@ -2,28 +2,38 @@
 # The profiler runs only with disaggregated deployments (decode + prefill).
 # The DGDR examples already embed the base disaggregated DGD under spec.overrides.dgd.
 # Prerequisites: Dynamo 1.0.1 installed, hf-token-secret in namespace, GPU nodes
+#
+# Note: In the current Dynamo 1.0.1 docs/runtime, vLLM rapid/AIC profiling is not
+# reliable. Use the thorough online path for vLLM. Keep the rapid manifest only as a
+# reference while NVIDIA resolves the rapid-path support gap.
+#
+# Important for 1-node / 4-GPU clusters: hardware.totalGpus=4 constrains the final
+# selected deployment budget, but thorough profiling still benchmarks standalone
+# prefill and decode candidates up to TP4. Make sure all 4 GPUs are free while the
+# profiler runs, or lower totalGpus to the number of GPUs you can actually spare.
 
 export NAMESPACE=dynamo-system
 
-# 1) Submit a profiling request (pick one)
-# Rapid search (AI Configurator-backed where supported):
-kubectl apply -f profile_sla_aic_dgdr.yaml
-# Thorough online sweep on real GPUs:
-# kubectl apply -f profile_sla_online_dgdr.yaml
+# 1) Submit a profiling request
+# Recommended for vLLM on Dynamo 1.0.1: thorough online sweep on real GPUs
+kubectl apply -f profile_sla_online_dgdr.yaml
+#
+# Optional reference only: rapid/AIC path
+# kubectl apply -f profile_sla_aic_dgdr.yaml
 
 # 2) Watch DGDR state
 kubectl get dgdr -n $NAMESPACE
-kubectl describe dgdr qwen-sla-aic -n $NAMESPACE
+kubectl describe dgdr qwen-sla-online -n $NAMESPACE
 
 # 3) Tail profiler job logs
-kubectl logs -f job/profile-qwen-sla-aic -n $NAMESPACE
+kubectl logs -f job/profile-qwen-sla-online -n $NAMESPACE
 
 # 4) Inspect outputs
-kubectl get configmap dgdr-output-qwen-sla-aic -n $NAMESPACE -o yaml
+kubectl get configmap dgdr-output-qwen-sla-online -n $NAMESPACE -o yaml
 
 # 5) Extract the generated DGD from DGDR status
-kubectl get dgdr qwen-sla-aic -n $NAMESPACE \
+kubectl get dgdr qwen-sla-online -n $NAMESPACE \
   -o jsonpath='{.status.profilingResults.selectedConfig}' | yq
 
 # 6) Inspect the auto-applied deployment
-kubectl get dynamographdeployment qwen-sla-aic -n $NAMESPACE -o yaml
+kubectl get dynamographdeployment qwen-sla-online -n $NAMESPACE -o yaml
