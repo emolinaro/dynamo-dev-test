@@ -1,23 +1,42 @@
-# Official commands from the Dynamo docs / upstream launch scripts.
-# These are not yet adapted into Kubernetes manifests in this repo.
+# vLLM-Omni text-to-image with Qwen/Qwen-Image
+kubectl apply -f vllm-agg_qwen_image.yaml
+kubectl -n dynamo-system get dynamographdeployment vllm-agg-qwen-image
+kubectl -n dynamo-system port-forward svc/vllm-agg-qwen-image-frontend 8000:8000 &
 
-# vLLM-Omni text-to-image
-bash examples/backends/vllm/launch/agg_omni_image.sh
-
-curl -s http://localhost:8000/v1/images/generations \
+# Recommended: image generation endpoint returns a file/url-style response
+curl -s http://127.0.0.1:8000/v1/images/generations \
   -H "Content-Type: application/json" \
   -d '{
     "model": "Qwen/Qwen-Image",
     "prompt": "A cat sitting on a windowsill",
     "size": "1024x1024",
     "response_format": "url"
-  }'
+  }' | head -c 2000
+echo
 
-# SGLang image diffusion
-cd $DYNAMO_HOME/examples/backends/sglang
-./launch/image_diffusion.sh
+# If /v1/images/generations returns a file:// URL, copy the image out of the worker pod:
+RESP=$(curl -s http://127.0.0.1:8000/v1/images/generations \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "Qwen/Qwen-Image",
+    "prompt": "A cat sitting on a windowsill",
+    "size": "1024x1024",
+    "response_format": "url"
+  }')
 
-curl -s http://localhost:8000/v1/images/generations \
+IMG_URL=$(echo "$RESP" | jq -r '.data[0].url')
+IMG_PATH=${IMG_URL#file://}
+WORKER_POD=$(kubectl -n dynamo-system get pods -o name | grep vllm-agg-qwen-image-omniimageworker | head -n 1 | sed 's#pod/##')
+
+mkdir -p ~/Downloads/qwen-image
+kubectl -n dynamo-system cp "${WORKER_POD}:${IMG_PATH}" ~/Downloads/qwen-image/
+
+# SGLang image diffusion with black-forest-labs/FLUX.1-dev
+kubectl apply -f sglang-agg_flux_image.yaml
+kubectl -n dynamo-system get dynamographdeployment sglang-agg-flux-image
+kubectl -n dynamo-system port-forward svc/sglang-agg-flux-image-frontend 8001:8000 &
+
+curl -s http://127.0.0.1:8001/v1/images/generations \
   -H "Content-Type: application/json" \
   -d '{
     "model": "black-forest-labs/FLUX.1-dev",
@@ -27,4 +46,5 @@ curl -s http://localhost:8000/v1/images/generations \
     "nvext": {
       "num_inference_steps": 15
     }
-  }'
+  }' | head -c 2000
+echo

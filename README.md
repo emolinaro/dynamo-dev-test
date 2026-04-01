@@ -1,18 +1,18 @@
 # dynamo-dev-test
 
-Kubernetes manifests and quick commands for deploying **NVIDIA AI Dynamo** graph deployments using the **vLLM runtime**, covering:
+Kubernetes manifests and quick commands for deploying **NVIDIA AI Dynamo** graph deployments on Kubernetes, covering:
 
 - Text (Qwen3)
 - Image/Vision (LLaVA 1.5, Qwen2.5-VL)
 - Audio (Qwen2-Audio)
 - Video (LLaVA-NeXT-Video)
 - Profiler: SLA profiling examples for rapid and thorough DGDR (DynamoGraphDeploymentRequest) runs against Qwen3-0.6B — **runs only with disaggregated** (decode + prefill) deployments
-- GenAI: doc-based scaffolding for generation workflows from the current Dynamo docs, including text-to-image, text-to-video, image-to-video, and diffusion examples
+- GenAI: repo-local generation examples adapted from the current Dynamo docs across vLLM-Omni, SGLang, and experimental TensorRT-LLM paths
 
 Each modality lives in its own folder and includes:
 
-- A `cmd.txt` with a minimal deploy + port-forward + test `curl`
-- One or more `DynamoGraphDeployment` YAML manifests
+- A `cmd.txt` with a minimal deploy + test flow
+- One or more `DynamoGraphDeployment` YAML manifests where the public docs provide a stable path
 
 **This repository targets the first scenario below** (Kubernetes + Dynamo operator + DGD).
 
@@ -52,8 +52,20 @@ For more detail and a **comparison table** (local file-KV, Compose, K8s operator
   - `profile_sla_online_dgdr.yaml`: `nvidia.com/v1beta1` DGDR using `searchStrategy: thorough`
   - `cmd.txt`: apply DGDR, watch request state, tail profiler job logs, and inspect the generated DGD
 - `GenAI/`
-  - doc-oriented scaffold for generation workflows discussed in the current Dynamo docs
-  - `text-to-image/`, `text-to-video/`, `text-to-audio/`, `text-to-text/`, `image-to-video/`, `llm-diffusion/`, `fastvideo/`, `trtllm-video-diffusion/`
+  - generation-focused examples adapted from the current Dynamo docs
+  - `text-to-image/`
+    - `vllm-agg_qwen_image.yaml`: vLLM-Omni image generation with `Qwen/Qwen-Image`
+    - `sglang-agg_flux_image.yaml`: SGLang image generation with `black-forest-labs/FLUX.1-dev`
+  - `text-to-video/`
+    - `vllm-agg_wan_t2v.yaml`: vLLM-Omni text-to-video with `Wan-AI/Wan2.1-T2V-1.3B-Diffusers`
+  - `image-to-video/`
+    - `vllm-agg_wan_i2v.yaml`: vLLM-Omni image-to-video with `Wan-AI/Wan2.2-TI2V-5B-Diffusers`
+  - `llm-diffusion/`
+    - `sglang-agg_llada2_mini.yaml`: SGLang diffusion LLM example with `inclusionAI/LLaDA2.0-mini-preview`
+  - `trtllm-video-diffusion/`
+    - `trtllm-agg_wan_t2v.yaml`: experimental TensorRT-LLM video diffusion example
+  - `text-to-audio/`
+    - placeholder only; no first-class Dynamo text-to-audio guide was found in the current public docs
 
 ## Prerequisites
 
@@ -68,6 +80,8 @@ For more detail and a **comparison table** (local file-KV, Compose, K8s operator
 > Note: Some multimodal examples prefer TCP request plane to avoid payload limits (see the image LLaVA manifest comments and `DYN_REQUEST_PLANE` usage).
 >
 > If UCX / RDMA is not available in your environment (for example, `nixl` cannot find RDMA devices), you can safely fall back to **TCP-only UCX** by setting the UCX-related env vars in the manifests (as shown in the Qwen vision/audio/video examples) so that UCX uses `tcp` instead of attempting RDMA transports.
+>
+> GenAI note: first startup can be slow because models are downloaded from Hugging Face, and transient `429 Too Many Requests` errors are possible. The `trtllm-video-diffusion/` example is also more sensitive to host GPU driver compatibility than the vLLM and SGLang examples.
 
 ## Quick start
 

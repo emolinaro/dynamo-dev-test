@@ -1,13 +1,14 @@
-# Official commands from the Dynamo docs / upstream launch scripts.
+# SGLang LLM diffusion with inclusionAI/LLaDA2.0-mini-preview
+kubectl apply -f sglang-agg_llada2_mini.yaml
+kubectl -n dynamo-system get dynamographdeployment sglang-agg-llada2-mini
+kubectl -n dynamo-system port-forward svc/sglang-agg-llada2-mini-frontend 8000:8000 &
 
-cd $DYNAMO_HOME/examples/backends/sglang
-./launch/diffusion_llada.sh
-
-curl -s http://localhost:8001/v1/chat/completions \
+curl -s http://127.0.0.1:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "inclusionAI/LLaDA2.0-mini-preview",
     "messages": [{"role": "user", "content": "Hello! How are you?"}],
     "temperature": 0.7,
     "max_tokens": 512
-  }'
+  }' | head -c 2000
+echo

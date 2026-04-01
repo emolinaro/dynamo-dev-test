@@ -1,11 +1,9 @@
-# Official commands from the Dynamo docs.
+# TRT-LLM video diffusion with Wan-AI/Wan2.1-T2V-1.3B-Diffusers
+kubectl apply -f trtllm-agg_wan_t2v.yaml
+kubectl -n dynamo-system get dynamographdeployment trtllm-video-diffusion
+kubectl -n dynamo-system port-forward svc/trtllm-video-diffusion-frontend 8000:8000 &
 
-python -m dynamo.trtllm \
-  --modality video_diffusion \
-  --model-path Wan-AI/Wan2.1-T2V-1.3B-Diffusers \
-  --media-output-fs-url file:///tmp/dynamo_media
-
-curl -s -X POST http://localhost:8000/v1/videos \
+curl -s -X POST http://127.0.0.1:8000/v1/videos \
   -H "Content-Type: application/json" \
   -d '{
     "prompt": "A cat playing piano",
@@ -15,4 +13,15 @@ curl -s -X POST http://localhost:8000/v1/videos \
     "nvext": {
       "fps": 24
     }
-  }'
+  }' > response.json
+
+cat response.json | jq .
+
+# If the response contains a file:// URL, copy the MP4 out of the worker pod:
+VIDEO_URL=$(jq -r '.data[0].url' response.json)
+VIDEO_PATH=${VIDEO_URL#file://}
+VIDEO_NAME=$(basename "$VIDEO_PATH")
+WORKER_POD=$(kubectl -n dynamo-system get pods -o name | grep trtllm-video-diffusion-trtllmvideoworker | head -n 1 | sed 's#pod/##')
+
+mkdir -p ~/Downloads/trtllm-video-diffusion
+kubectl -n dynamo-system cp "${WORKER_POD}:${VIDEO_PATH}" "$HOME/Downloads/trtllm-video-diffusion/${VIDEO_NAME}"

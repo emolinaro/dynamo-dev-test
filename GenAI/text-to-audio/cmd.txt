@@ -1,4 +1,3 @@
 # Placeholder
 #
-# No first-class official Dynamo text-to-audio generation example was found
-# in the docs used for this scaffold.
+# No first-class official Dynamo text-to-audio generation example was found in the docs used for this scaffold.

@@ -1,10 +1,9 @@
-# Official commands from the Dynamo docs / upstream launch scripts.
-# These are not yet adapted into Kubernetes manifests in this repo.
+# vLLM-Omni text-to-video with Wan-AI/Wan2.1-T2V-1.3B-Diffusers
+kubectl apply -f vllm-agg_wan_t2v.yaml
+kubectl -n dynamo-system get dynamographdeployment vllm-agg-wan-t2v
+kubectl -n dynamo-system port-forward svc/vllm-agg-wan-t2v-frontend 8000:8000 &
 
-# vLLM-Omni text-to-video
-bash examples/backends/vllm/launch/agg_omni_video.sh
-
-curl -s http://localhost:8000/v1/videos \
+curl -s http://127.0.0.1:8000/v1/videos \
   -H "Content-Type: application/json" \
   -d '{
     "model": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
@@ -12,27 +11,15 @@ curl -s http://localhost:8000/v1/videos \
     "seconds": 2,
     "size": "832x480",
     "response_format": "url"
-  }'
+  }' > response.json
 
-# SGLang video generation
-cd $DYNAMO_HOME/examples/backends/sglang
-./launch/text-to-video-diffusion.sh
+cat response.json | jq .
 
-curl -s http://localhost:8000/v1/videos \
-  -H "Content-Type: application/json" \
-  -d '{
-    "prompt": "A curious raccoon exploring a garden",
-    "model": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
-    "seconds": 2,
-    "size": "832x480",
-    "response_format": "url",
-    "nvext": {
-      "fps": 8,
-      "num_frames": 17,
-      "num_inference_steps": 50
-    }
-  }'
+# If the response contains a file:// URL, copy the MP4 out of the worker pod:
+VIDEO_URL=$(jq -r '.data[0].url' response.json)
+VIDEO_PATH=${VIDEO_URL#file://}
+VIDEO_NAME=$(basename "$VIDEO_PATH")
+WORKER_POD=$(kubectl -n dynamo-system get pods -o name | grep vllm-agg-wan-t2v-omnivideoworker | head -n 1 | sed 's#pod/##')
 
-# See also:
-# - ../fastvideo/cmd.txt
-# - ../trtllm-video-diffusion/cmd.txt
+mkdir -p ~/Downloads/wan-t2v
+kubectl -n dynamo-system cp "${WORKER_POD}:${VIDEO_PATH}" "$HOME/Downloads/wan-t2v/${VIDEO_NAME}"

@@ -1,14 +1,14 @@
-# Official commands from the Dynamo docs / upstream launch scripts.
+# vLLM-Omni image-to-video with Wan-AI/Wan2.2-TI2V-5B-Diffusers
+kubectl apply -f vllm-agg_wan_i2v.yaml
+kubectl -n dynamo-system get dynamographdeployment vllm-agg-wan-i2v
+kubectl -n dynamo-system port-forward svc/vllm-agg-wan-i2v-frontend 8000:8000 &
 
-# vLLM-Omni image-to-video
-bash examples/backends/vllm/launch/agg_omni_i2v.sh
-
-curl -s http://localhost:8000/v1/videos \
+curl -s http://127.0.0.1:8000/v1/videos \
   -H "Content-Type: application/json" \
   -d '{
     "model": "Wan-AI/Wan2.2-TI2V-5B-Diffusers",
-    "prompt": "A bear playing with yarn, smooth motion",
-    "input_reference": "https://example.com/bear.png",
+    "prompt": "A curious cat energetically plays with a plush bird toy suspended in the air, in a cozy sunlit room with soft shadows.",
+    "input_reference": "https://images.unsplash.com/photo-1545249390-6bdfa286032f?auto=format&fit=crop&w=832&q=80",
     "size": "832x480",
     "response_format": "url",
     "nvext": {
@@ -19,7 +19,18 @@ curl -s http://localhost:8000/v1/videos \
       "guidance_scale_2": 1.0,
       "seed": 42
     }
-  }'
+  }' > response.json
+
+cat response.json | jq .
+
+# If the response contains a file:// URL, copy the MP4 out of the worker pod:
+VIDEO_URL=$(jq -r '.data[0].url' response.json)
+VIDEO_PATH=${VIDEO_URL#file://}
+VIDEO_NAME=$(basename "$VIDEO_PATH")
+WORKER_POD=$(kubectl -n dynamo-system get pods -o name | grep vllm-agg-wan-i2v-omnivideoworker | head -n 1 | sed 's#pod/##')
+
+mkdir -p ~/Downloads/wan-i2v
+kubectl -n dynamo-system cp "${WORKER_POD}:${VIDEO_PATH}" "$HOME/Downloads/wan-i2v/${VIDEO_NAME}"
 
 # SGLang note:
 # The official docs state that the video generation worker supports both T2V

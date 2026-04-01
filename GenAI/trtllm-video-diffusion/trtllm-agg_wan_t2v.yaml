@@ -1,0 +1,46 @@
+apiVersion: nvidia.com/v1alpha1
+kind: DynamoGraphDeployment
+metadata:
+  namespace: dynamo-system
+  name: trtllm-video-diffusion
+spec:
+  envs:
+  # Video payloads are large. TCP avoids NATS payload limits.
+  - name: DYN_REQUEST_PLANE
+    value: "tcp"
+  backendFramework: trtllm
+  services:
+    Frontend:
+      componentType: frontend
+      replicas: 1
+      extraPodSpec:
+        mainContainer:
+          image: nvcr.io/nvidia/ai-dynamo/tensorrtllm-runtime:1.0.1
+    TRTLLMVideoWorker:
+      envFromSecret: hf-token-secret
+      componentType: worker
+      replicas: 1
+      resources:
+        limits:
+          gpu: "1"
+        requests:
+          custom:
+            ephemeral-storage: "10Gi"
+      extraPodSpec:
+        runtimeClassName: nvidia
+        nodeSelector:
+          ucloud.dk/gpu: "true"
+        mainContainer:
+          image: nvcr.io/nvidia/ai-dynamo/tensorrtllm-runtime:1.0.1
+          command:
+            - python3
+            - -m
+            - dynamo.trtllm
+          args:
+            - --modality
+            - video_diffusion
+            - --model-path
+            - Wan-AI/Wan2.1-T2V-1.3B-Diffusers
+            - --media-output-fs-url
+            - file:///tmp/dynamo_media
+

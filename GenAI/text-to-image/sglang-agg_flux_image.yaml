@@ -1,0 +1,51 @@
+apiVersion: nvidia.com/v1alpha1
+kind: DynamoGraphDeployment
+metadata:
+  namespace: dynamo-system
+  name: sglang-agg-flux-image
+spec:
+  envs:
+  # Generated image payloads can be large. TCP avoids NATS payload limits.
+  - name: DYN_REQUEST_PLANE
+    value: "tcp"
+  backendFramework: sglang
+  services:
+    Frontend:
+      envFromSecret: hf-token-secret
+      componentType: frontend
+      replicas: 1
+      extraPodSpec:
+        mainContainer:
+          image: nvcr.io/nvidia/ai-dynamo/sglang-runtime:1.0.1
+    SGLangImageWorker:
+      envFromSecret: hf-token-secret
+      componentType: worker
+      replicas: 1
+      resources:
+        limits:
+          gpu: "1"
+        requests:
+          custom:
+            ephemeral-storage: "4Gi"
+      extraPodSpec:
+        runtimeClassName: nvidia
+        nodeSelector:
+          ucloud.dk/gpu: "true"
+        mainContainer:
+          image: nvcr.io/nvidia/ai-dynamo/sglang-runtime:1.0.1
+          workingDir: /workspace/examples/backends/sglang
+          command:
+            - python3
+            - -m
+            - dynamo.sglang
+          args:
+            - --model-path
+            - black-forest-labs/FLUX.1-dev
+            - --served-model-name
+            - black-forest-labs/FLUX.1-dev
+            - --tp
+            - "1"
+            - --trust-remote-code
+            - --image-diffusion-worker
+            - --media-output-fs-url
+            - file:///tmp/dynamo_media/images

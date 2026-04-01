@@ -1,0 +1,46 @@
+apiVersion: nvidia.com/v1alpha1
+kind: DynamoGraphDeployment
+metadata:
+  namespace: dynamo-system
+  name: sglang-agg-llada2-mini
+spec:
+  backendFramework: sglang
+  services:
+    Frontend:
+      envFromSecret: hf-token-secret
+      componentType: frontend
+      replicas: 1
+      extraPodSpec:
+        mainContainer:
+          image: nvcr.io/nvidia/ai-dynamo/sglang-runtime:1.0.1
+    SGLangDiffusionLMWorker:
+      envFromSecret: hf-token-secret
+      componentType: worker
+      replicas: 1
+      resources:
+        limits:
+          gpu: "1"
+        requests:
+          custom:
+            ephemeral-storage: "4Gi"
+      extraPodSpec:
+        runtimeClassName: nvidia
+        nodeSelector:
+          ucloud.dk/gpu: "true"
+        mainContainer:
+          image: nvcr.io/nvidia/ai-dynamo/sglang-runtime:1.0.1
+          workingDir: /workspace/examples/backends/sglang
+          command:
+            - python3
+            - -m
+            - dynamo.sglang
+          args:
+            - --model-path
+            - inclusionAI/LLaDA2.0-mini-preview
+            - --served-model-name
+            - inclusionAI/LLaDA2.0-mini-preview
+            - --tp
+            - "1"
+            - --trust-remote-code
+            - --dllm-algorithm
+            - LowConfidence
