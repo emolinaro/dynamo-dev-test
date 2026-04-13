@@ -1,0 +1,104 @@
+# Shared GPU-budget example for 2 independent vLLM text deployments.
+# model-a is disaggregated (2 GPUs), model-b is aggregated (1 GPU).
+#
+# Required:
+#   export STORAGE_CLASS_NAME=<rwx-storage-class>
+#   export DYNAMO_IMAGE=<frontend/planner image>
+#   export DYNAMO_VLLM_IMAGE=<worker image>
+#
+# Note:
+#   STORAGE_CLASS_NAME must support ReadWriteMany for the shared model-cache PVC.
+#   This cluster uses csi-cephfs-sc for RWX. Do not switch to csi-rbd-sc here.
+#
+# Example image values for this repo:
+#   export DYNAMO_IMAGE=nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1
+#   export DYNAMO_VLLM_IMAGE=nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1
+#
+# Example model IDs (1 GPU per prefill/decode worker on H100-class GPUs; override as needed):
+#   export MODEL_A=meta-llama/Llama-3.2-3B-Instruct
+#   export MODEL_B=Qwen/Qwen2.5-7B-Instruct
+#
+# Dynamo 1.0.1 does not accept the upstream --max-total-gpus flag on
+# dynamo.global_planner, so this example uses per-model planner budgets instead.
+# The defaults below keep model-a at 2 GPUs total (1 prefill + 1 decode) and
+# cap model-b at 1 GPU in aggregated mode for a 3-GPU baseline.
+# Only the disaggregated model-a planner needs staged profiling data.
+
+export K8S_NAMESPACE=${K8S_NAMESPACE:-dynamo-system}
+export STORAGE_CLASS_NAME=${STORAGE_CLASS_NAME:-csi-cephfs-sc}
+export DYNAMO_IMAGE=${DYNAMO_IMAGE:-nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1}
+export DYNAMO_VLLM_IMAGE=${DYNAMO_VLLM_IMAGE:-nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1}
+export MODEL_A=${MODEL_A:-meta-llama/Llama-3.2-3B-Instruct}
+export MODEL_B=${MODEL_B:-Qwen/Qwen2.5-7B-Instruct}
+export MODEL_A_MAX_GPU_BUDGET=${MODEL_A_MAX_GPU_BUDGET:-2}
+export MODEL_B_MAX_GPU_BUDGET=${MODEL_B_MAX_GPU_BUDGET:-1}
+export PROFILE_RESULTS_STAGING_ROOT=${PROFILE_RESULTS_STAGING_ROOT:-/profile-results}
+export MODEL_A_PROFILE_RESULTS_SOURCE_DIR=${MODEL_A_PROFILE_RESULTS_SOURCE_DIR:-/workspace/tests/planner/profiling_results/H200_TP1P_TP1D}
+export MODEL_A_PROFILE_RESULTS_ALIAS_NAME=${MODEL_A_PROFILE_RESULTS_ALIAS_NAME:-H100_TP1P_TP1D}
+export MODEL_A_PROFILE_RESULTS_DIR=${MODEL_A_PROFILE_RESULTS_DIR:-$PROFILE_RESULTS_STAGING_ROOT/$MODEL_A_PROFILE_RESULTS_ALIAS_NAME}
+export LEGACY_PROFILE_RESULTS_DIR=/workspace/components/src/dynamo/planner/tests/data/profiling_results/H100_TP1P_TP1D
+
+if [ "$MODEL_A_PROFILE_RESULTS_DIR" = "$LEGACY_PROFILE_RESULTS_DIR" ]; then
+  echo "Refusing to deploy with legacy MODEL_A_PROFILE_RESULTS_DIR=$LEGACY_PROFILE_RESULTS_DIR"
+  echo "Unset stale shell exports first: unset MODEL_A_PROFILE_RESULTS_DIR"
+  exit 1
+fi
+
+: "${STORAGE_CLASS_NAME:?Set STORAGE_CLASS_NAME to an RWX-capable StorageClass}"
+: "${DYNAMO_IMAGE:?Set DYNAMO_IMAGE for the frontend/planner image}"
+: "${DYNAMO_VLLM_IMAGE:?Set DYNAMO_VLLM_IMAGE for the vLLM worker image}"
+
+export RENDERED=/tmp/global-planner-shared-gpu-budget.rendered.yaml
+
+# 1) Render and inspect the final manifest
+envsubst < global-planner-shared-gpu-budget.yaml > "$RENDERED"
+test "$(rg -c '^kind: ClusterRoleBinding$' "$RENDERED")" = 1
+test "$(rg -c '^kind: PersistentVolumeClaim$' "$RENDERED")" = 1
+test "$(rg -c '^kind: DynamoGraphDeployment$' "$RENDERED")" = 3
+! rg -n '\$\{[A-Z_][A-Z0-9_]*\}' "$RENDERED"
+! rg -n "$LEGACY_PROFILE_RESULTS_DIR" "$RENDERED"
+! rg -n 'image:\s*$|image:\s*null$' "$RENDERED"
+
+# 2) Validate shape, then apply
+# Some kubectl builds still contact the API server for discovery even with
+# --dry-run=client, so this step expects a reachable cluster context.
+kubectl apply --dry-run=client -f "$RENDERED"
+# Optional when connected to a cluster with Dynamo CRDs installed:
+# kubectl apply --dry-run=server -f "$RENDERED"
+kubectl apply -f "$RENDERED"
+
+# 3) Inspect the created resources
+kubectl -n "$K8S_NAMESPACE" get pvc hf-model-cache
+kubectl -n "$K8S_NAMESPACE" get dynamographdeployment gp-ctrl model-a model-b
+kubectl -n "$K8S_NAMESPACE" get pods | rg 'gp-ctrl|model-a|model-b'
+
+# 4) Verify both model frontends are reachable
+kubectl -n "$K8S_NAMESPACE" port-forward svc/model-a-frontend 8000:8000 &
+kubectl -n "$K8S_NAMESPACE" port-forward svc/model-b-frontend 8001:8000 &
+
+curl -s http://127.0.0.1:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"model\": \"${MODEL_A}\",
+    \"messages\": [{\"role\":\"user\",\"content\":\"Say hello from model A in one short sentence.\"}],
+    \"temperature\": 0.2,
+    \"max_tokens\": 64
+  }" | head -c 2000
+echo
+
+curl -s http://127.0.0.1:8001/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"model\": \"${MODEL_B}\",
+    \"messages\": [{\"role\":\"user\",\"content\":\"Say hello from model B in one short sentence.\"}],
+    \"temperature\": 0.2,
+    \"max_tokens\": 64
+  }" | head -c 2000
+echo
+
+# 5) Inspect shared-cache mounts and planner logs
+kubectl -n "$K8S_NAMESPACE" get pods -o yaml | rg 'hf-model-cache|/home/dynamo/.cache/huggingface/hub'
+kubectl -n "$K8S_NAMESPACE" get pods | rg 'gp-ctrl|model-a|model-b'
+
+# 6) Delete the example
+kubectl delete -f "$RENDERED"

@@ -38,7 +38,7 @@ Updated against NVIDIA Dynamo documentation on March 31, 2026. This reflects the
 | **Observability** | Operator metrics are exposed via Prometheus and ServiceMonitor integration; Grafana dashboards are available. |
 | **Platform install** | Install CRDs and the `dynamo-platform` chart. The platform deploys the operator and core services such as etcd and NATS; multinode orchestrators are optional. |
 
-**This repository** is built for this scenario: the `text`, `image`, `audio`, `video`, and `profiler` directories all assume operator-managed DGD or DGDR workflows on Kubernetes.
+**This repository** is built for this scenario: the `text`, `image`, `audio`, `video`, `profiler`, and `GlobalPlanner` directories all assume operator-managed DGD or DGDR workflows on Kubernetes. The `GlobalPlanner` folder now includes both a shared-GPU-budget control-plane example and a pool-based single-frontend multimodel example.
 
 ### 4. Kubernetes disaggregated serving: RDMA-first specialized path
 
@@ -90,6 +90,6 @@ This is not the default recommendation for balanced workloads. The current disag
 | Scenario | Focus | Fit for this repo |
 |----------|-------|-------------------|
 | **Local single-machine (file or Compose)** | CLI workflows, small-scale validation, local debugging | Useful for understanding Dynamo, but not what this repo automates |
-| **Kubernetes operator-managed** | Declarative DGD/DGDR workflows on a cluster | Yes, this is the main target |
+| **Kubernetes operator-managed** | Declarative DGD/DGDR workflows on a cluster | Yes, this is the main target, including the shared-budget and single-frontend `GlobalPlanner` examples |
 | **Kubernetes disaggregated (RDMA)** | Specialized high-performance prefill/decode separation | Partially, mainly through the profiler and disaggregated examples |
 | **Kubernetes + GAIE/kGateway** | Gateway-layer routing in front of Dynamo | Adjacent pattern; not what the manifests in this repo currently deploy |

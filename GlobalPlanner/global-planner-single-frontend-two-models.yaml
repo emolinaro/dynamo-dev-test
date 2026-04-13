@@ -1,0 +1,795 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+#
+# vLLM-based GlobalPlanner example adapted from the upstream
+# global-planner-vllm-test.yaml to serve 2 models behind a single frontend.
+#
+# Architecture:
+# - DGD gp-vllm-ctrl: Frontend + GlobalRouterModelA + GlobalRouterModelB + GlobalPlanner
+# - DGD gp-vllm-model-a-prefill-0: LocalRouter + VllmPrefillWorker (TP1) + Planner
+# - DGD gp-vllm-model-a-prefill-1: LocalRouter + VllmPrefillWorker (TP2) + Planner
+# - DGD gp-vllm-model-a-decode-0:  LocalRouter + VllmDecodeWorker  (TP1) + Planner
+# - DGD gp-vllm-model-b-prefill-0: LocalRouter + VllmPrefillWorker (TP1) + Planner
+# - DGD gp-vllm-model-b-prefill-1: LocalRouter + VllmPrefillWorker (TP2) + Planner
+# - DGD gp-vllm-model-b-decode-0:  LocalRouter + VllmDecodeWorker  (TP1) + Planner
+#
+# Notes:
+# - The single frontend intentionally omits --model-name so it can expose both
+#   model registrations from the two GlobalRouter components in the same Dynamo
+#   namespace.
+# - This example follows the pool-based upstream test topology and does not set
+#   fixed planner budgets. Use global-planner-shared-gpu-budget.yaml if you need
+#   the budgeted variant.
+# - Each planner pod stages the bundled profiling fixture into a dedicated
+#   alias directory under ${PROFILE_RESULTS_STAGING_ROOT} before startup.
+# - All vLLM workers mount the same RWX PVC for Hugging Face cache reuse.
+#
+# Render and apply with:
+# envsubst < global-planner-single-frontend-two-models.yaml | kubectl apply -f -
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ${K8S_NAMESPACE}-planner-vllm-two-models
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: dynamo-platform-dynamo-operator-planner
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: ${K8S_NAMESPACE}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gp-vllm-model-a-router-config
+  namespace: ${K8S_NAMESPACE}
+data:
+  global_router_config.json: |
+    {
+      "num_prefill_pools": 2,
+      "num_decode_pools": 1,
+      "prefill_pool_dynamo_namespaces": [
+        "${K8S_NAMESPACE}-gp-vllm-model-a-prefill-0",
+        "${K8S_NAMESPACE}-gp-vllm-model-a-prefill-1"
+      ],
+      "decode_pool_dynamo_namespaces": [
+        "${K8S_NAMESPACE}-gp-vllm-model-a-decode-0"
+      ],
+      "prefill_pool_selection_strategy": {
+        "ttft_min": 10, "ttft_max": 3000, "ttft_resolution": 2,
+        "isl_min": 0,   "isl_max": 32000, "isl_resolution": 2,
+        "prefill_pool_mapping": [[0,1],[0,1]]
+      },
+      "decode_pool_selection_strategy": {
+        "itl_min": 10,  "itl_max": 500,   "itl_resolution": 2,
+        "context_length_min": 0, "context_length_max": 32000, "context_length_resolution": 2,
+        "decode_pool_mapping": [[0,0],[0,0]]
+      }
+    }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gp-vllm-model-b-router-config
+  namespace: ${K8S_NAMESPACE}
+data:
+  global_router_config.json: |
+    {
+      "num_prefill_pools": 2,
+      "num_decode_pools": 1,
+      "prefill_pool_dynamo_namespaces": [
+        "${K8S_NAMESPACE}-gp-vllm-model-b-prefill-0",
+        "${K8S_NAMESPACE}-gp-vllm-model-b-prefill-1"
+      ],
+      "decode_pool_dynamo_namespaces": [
+        "${K8S_NAMESPACE}-gp-vllm-model-b-decode-0"
+      ],
+      "prefill_pool_selection_strategy": {
+        "ttft_min": 10, "ttft_max": 3000, "ttft_resolution": 2,
+        "isl_min": 0,   "isl_max": 32000, "isl_resolution": 2,
+        "prefill_pool_mapping": [[0,1],[0,1]]
+      },
+      "decode_pool_selection_strategy": {
+        "itl_min": 10,  "itl_max": 500,   "itl_resolution": 2,
+        "context_length_min": 0, "context_length_max": 32000, "context_length_resolution": 2,
+        "decode_pool_mapping": [[0,0],[0,0]]
+      }
+    }
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hf-model-cache-vllm-two-models
+  namespace: ${K8S_NAMESPACE}
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ${STORAGE_CLASS_NAME}
+  resources:
+    requests:
+      storage: 50Gi
+---
+apiVersion: nvidia.com/v1alpha1
+kind: DynamoGraphDeployment
+metadata:
+  name: gp-vllm-ctrl
+  namespace: ${K8S_NAMESPACE}
+spec:
+  services:
+    Frontend:
+      componentType: frontend
+      replicas: 1
+      extraPodSpec:
+        mainContainer:
+          image: ${DYNAMO_IMAGE}
+          workingDir: /workspace
+          command:
+            - python3
+            - -m
+            - dynamo.frontend
+          args:
+            - --router-mode
+            - round-robin
+            - --namespace
+            - ${K8S_NAMESPACE}-gp-vllm-ctrl
+    GlobalRouterModelA:
+      componentType: default
+      replicas: 1
+      extraPodSpec:
+        volumes:
+          - name: global-router-config
+            configMap:
+              name: gp-vllm-model-a-router-config
+        mainContainer:
+          image: ${DYNAMO_IMAGE}
+          workingDir: /workspace
+          command:
+            - python3
+            - -m
+            - dynamo.global_router
+          args:
+            - --config
+            - /config/global_router_config.json
+            - --model-name
+            - ${MODEL_A}
+            - --namespace
+            - ${K8S_NAMESPACE}-gp-vllm-ctrl
+          volumeMounts:
+            - name: global-router-config
+              mountPath: /config
+              readOnly: true
+    GlobalRouterModelB:
+      componentType: default
+      replicas: 1
+      extraPodSpec:
+        volumes:
+          - name: global-router-config
+            configMap:
+              name: gp-vllm-model-b-router-config
+        mainContainer:
+          image: ${DYNAMO_IMAGE}
+          workingDir: /workspace
+          command:
+            - python3
+            - -m
+            - dynamo.global_router
+          args:
+            - --config
+            - /config/global_router_config.json
+            - --model-name
+            - ${MODEL_B}
+            - --namespace
+            - ${K8S_NAMESPACE}-gp-vllm-ctrl
+          volumeMounts:
+            - name: global-router-config
+              mountPath: /config
+              readOnly: true
+    GlobalPlanner:
+      componentType: default
+      replicas: 1
+      extraPodSpec:
+        mainContainer:
+          image: ${DYNAMO_IMAGE}
+          command:
+            - python3
+            - -m
+            - dynamo.global_planner
+---
+apiVersion: nvidia.com/v1alpha1
+kind: DynamoGraphDeployment
+metadata:
+  name: gp-vllm-model-a-prefill-0
+  namespace: ${K8S_NAMESPACE}
+spec:
+  services:
+    LocalRouter:
+      componentType: default
+      replicas: 1
+      extraPodSpec:
+        mainContainer:
+          image: ${DYNAMO_IMAGE}
+          workingDir: /workspace
+          env:
+            - name: DYN_SYSTEM_PORT
+              value: "9090"
+          command:
+            - python3
+            - -m
+            - dynamo.router
+          args:
+            - --endpoint
+            - ${K8S_NAMESPACE}-gp-vllm-model-a-prefill-0.prefill.generate
+            - --router-block-size
+            - "16"
+            - --no-router-track-active-blocks
+    VllmPrefillWorker:
+      envFromSecret: hf-token-secret
+      componentType: worker
+      subComponentType: prefill
+      replicas: 1
+      resources:
+        limits:
+          gpu: "1"
+        requests:
+          custom:
+            ephemeral-storage: "2Gi"
+      extraPodSpec:
+        runtimeClassName: nvidia
+        nodeSelector:
+          ucloud.dk/gpu: "true"
+        volumes:
+          - name: hf-model-cache
+            persistentVolumeClaim:
+              claimName: hf-model-cache-vllm-two-models
+        mainContainer:
+          image: ${DYNAMO_VLLM_IMAGE}
+          workingDir: /workspace/examples/backends/vllm
+          command:
+            - python3
+            - -m
+            - dynamo.vllm
+          args:
+            - --model
+            - ${MODEL_A}
+            - --tensor-parallel-size
+            - "1"
+            - --disaggregation-mode
+            - prefill
+            - --kv-transfer-config
+            - '{"kv_connector":"NixlConnector","kv_role":"kv_both"}'
+          volumeMounts:
+            - name: hf-model-cache
+              mountPath: /home/dynamo/.cache/huggingface/hub
+    Planner:
+      componentType: planner
+      replicas: 1
+      extraPodSpec:
+        volumes:
+          - name: planner-profile-results
+            emptyDir: {}
+        initContainers:
+          - name: planner-profile-results-init
+            image: ${DYNAMO_IMAGE}
+            command:
+              - /bin/sh
+              - -lc
+            args:
+              - |
+                set -eu
+                mkdir -p "${PROFILE_RESULTS_STAGING_ROOT}/${MODEL_A_PROFILE_RESULTS_ALIAS_NAME}"
+                cp -R "${MODEL_A_PROFILE_RESULTS_SOURCE_DIR}/." "${PROFILE_RESULTS_STAGING_ROOT}/${MODEL_A_PROFILE_RESULTS_ALIAS_NAME}/"
+            volumeMounts:
+              - name: planner-profile-results
+                mountPath: ${PROFILE_RESULTS_STAGING_ROOT}
+        mainContainer:
+          image: ${DYNAMO_IMAGE}
+          volumeMounts:
+            - name: planner-profile-results
+              mountPath: ${PROFILE_RESULTS_STAGING_ROOT}
+          command:
+            - python3
+            - -m
+            - dynamo.planner
+          args:
+            - --config
+            - '{"environment":"global-planner","global_planner_namespace":"${K8S_NAMESPACE}-gp-vllm-ctrl","backend":"vllm","mode":"prefill","enable_load_scaling":false,"enable_throughput_scaling":true,"throughput_metrics_source":"router","ttft":2000,"max_gpu_budget":-1,"prefill_engine_num_gpu":1,"model_name":"${MODEL_A}","profile_results_dir":"${MODEL_A_PROFILE_RESULTS_DIR}"}'
+---
+apiVersion: nvidia.com/v1alpha1
+kind: DynamoGraphDeployment
+metadata:
+  name: gp-vllm-model-a-prefill-1
+  namespace: ${K8S_NAMESPACE}
+spec:
+  services:
+    LocalRouter:
+      componentType: default
+      replicas: 1
+      extraPodSpec:
+        mainContainer:
+          image: ${DYNAMO_IMAGE}
+          workingDir: /workspace
+          env:
+            - name: DYN_SYSTEM_PORT
+              value: "9090"
+          command:
+            - python3
+            - -m
+            - dynamo.router
+          args:
+            - --endpoint
+            - ${K8S_NAMESPACE}-gp-vllm-model-a-prefill-1.prefill.generate
+            - --router-block-size
+            - "16"
+            - --no-router-track-active-blocks
+    VllmPrefillWorker:
+      envFromSecret: hf-token-secret
+      componentType: worker
+      subComponentType: prefill
+      replicas: 1
+      resources:
+        limits:
+          gpu: "2"
+        requests:
+          custom:
+            ephemeral-storage: "2Gi"
+      extraPodSpec:
+        runtimeClassName: nvidia
+        nodeSelector:
+          ucloud.dk/gpu: "true"
+        volumes:
+          - name: hf-model-cache
+            persistentVolumeClaim:
+              claimName: hf-model-cache-vllm-two-models
+        mainContainer:
+          image: ${DYNAMO_VLLM_IMAGE}
+          workingDir: /workspace/examples/backends/vllm
+          command:
+            - python3
+            - -m
+            - dynamo.vllm
+          args:
+            - --model
+            - ${MODEL_A}
+            - --tensor-parallel-size
+            - "2"
+            - --disaggregation-mode
+            - prefill
+            - --kv-transfer-config
+            - '{"kv_connector":"NixlConnector","kv_role":"kv_both"}'
+          volumeMounts:
+            - name: hf-model-cache
+              mountPath: /home/dynamo/.cache/huggingface/hub
+    Planner:
+      componentType: planner
+      replicas: 1
+      extraPodSpec:
+        volumes:
+          - name: planner-profile-results
+            emptyDir: {}
+        initContainers:
+          - name: planner-profile-results-init
+            image: ${DYNAMO_IMAGE}
+            command:
+              - /bin/sh
+              - -lc
+            args:
+              - |
+                set -eu
+                mkdir -p "${PROFILE_RESULTS_STAGING_ROOT}/${MODEL_A_PROFILE_RESULTS_ALIAS_NAME}"
+                cp -R "${MODEL_A_PROFILE_RESULTS_SOURCE_DIR}/." "${PROFILE_RESULTS_STAGING_ROOT}/${MODEL_A_PROFILE_RESULTS_ALIAS_NAME}/"
+            volumeMounts:
+              - name: planner-profile-results
+                mountPath: ${PROFILE_RESULTS_STAGING_ROOT}
+        mainContainer:
+          image: ${DYNAMO_IMAGE}
+          volumeMounts:
+            - name: planner-profile-results
+              mountPath: ${PROFILE_RESULTS_STAGING_ROOT}
+          command:
+            - python3
+            - -m
+            - dynamo.planner
+          args:
+            - --config
+            - '{"environment":"global-planner","global_planner_namespace":"${K8S_NAMESPACE}-gp-vllm-ctrl","backend":"vllm","mode":"prefill","enable_load_scaling":false,"enable_throughput_scaling":true,"throughput_metrics_source":"router","ttft":2000,"max_gpu_budget":-1,"prefill_engine_num_gpu":2,"model_name":"${MODEL_A}","profile_results_dir":"${MODEL_A_PROFILE_RESULTS_DIR}"}'
+---
+apiVersion: nvidia.com/v1alpha1
+kind: DynamoGraphDeployment
+metadata:
+  name: gp-vllm-model-a-decode-0
+  namespace: ${K8S_NAMESPACE}
+spec:
+  services:
+    LocalRouter:
+      componentType: default
+      replicas: 1
+      extraPodSpec:
+        mainContainer:
+          image: ${DYNAMO_IMAGE}
+          workingDir: /workspace
+          env:
+            - name: DYN_SYSTEM_PORT
+              value: "9090"
+          command:
+            - python3
+            - -m
+            - dynamo.router
+          args:
+            - --endpoint
+            - ${K8S_NAMESPACE}-gp-vllm-model-a-decode-0.backend.generate
+            - --router-block-size
+            - "16"
+            - --router-kv-overlap-score-weight
+            - "0"
+    VllmDecodeWorker:
+      envFromSecret: hf-token-secret
+      componentType: worker
+      subComponentType: decode
+      replicas: 1
+      resources:
+        limits:
+          gpu: "1"
+        requests:
+          custom:
+            ephemeral-storage: "2Gi"
+      extraPodSpec:
+        runtimeClassName: nvidia
+        nodeSelector:
+          ucloud.dk/gpu: "true"
+        volumes:
+          - name: hf-model-cache
+            persistentVolumeClaim:
+              claimName: hf-model-cache-vllm-two-models
+        mainContainer:
+          image: ${DYNAMO_VLLM_IMAGE}
+          workingDir: /workspace/examples/backends/vllm
+          command:
+            - python3
+            - -m
+            - dynamo.vllm
+          args:
+            - --model
+            - ${MODEL_A}
+            - --tensor-parallel-size
+            - "1"
+            - --disaggregation-mode
+            - decode
+            - --kv-transfer-config
+            - '{"kv_connector":"NixlConnector","kv_role":"kv_both"}'
+          volumeMounts:
+            - name: hf-model-cache
+              mountPath: /home/dynamo/.cache/huggingface/hub
+    Planner:
+      componentType: planner
+      replicas: 1
+      extraPodSpec:
+        volumes:
+          - name: planner-profile-results
+            emptyDir: {}
+        initContainers:
+          - name: planner-profile-results-init
+            image: ${DYNAMO_IMAGE}
+            command:
+              - /bin/sh
+              - -lc
+            args:
+              - |
+                set -eu
+                mkdir -p "${PROFILE_RESULTS_STAGING_ROOT}/${MODEL_A_PROFILE_RESULTS_ALIAS_NAME}"
+                cp -R "${MODEL_A_PROFILE_RESULTS_SOURCE_DIR}/." "${PROFILE_RESULTS_STAGING_ROOT}/${MODEL_A_PROFILE_RESULTS_ALIAS_NAME}/"
+            volumeMounts:
+              - name: planner-profile-results
+                mountPath: ${PROFILE_RESULTS_STAGING_ROOT}
+        mainContainer:
+          image: ${DYNAMO_IMAGE}
+          volumeMounts:
+            - name: planner-profile-results
+              mountPath: ${PROFILE_RESULTS_STAGING_ROOT}
+          command:
+            - python3
+            - -m
+            - dynamo.planner
+          args:
+            - --config
+            - '{"environment":"global-planner","global_planner_namespace":"${K8S_NAMESPACE}-gp-vllm-ctrl","backend":"vllm","mode":"decode","enable_load_scaling":false,"enable_throughput_scaling":true,"throughput_metrics_source":"router","itl":200,"max_gpu_budget":-1,"decode_engine_num_gpu":1,"model_name":"${MODEL_A}","profile_results_dir":"${MODEL_A_PROFILE_RESULTS_DIR}"}'
+---
+apiVersion: nvidia.com/v1alpha1
+kind: DynamoGraphDeployment
+metadata:
+  name: gp-vllm-model-b-prefill-0
+  namespace: ${K8S_NAMESPACE}
+spec:
+  services:
+    LocalRouter:
+      componentType: default
+      replicas: 1
+      extraPodSpec:
+        mainContainer:
+          image: ${DYNAMO_IMAGE}
+          workingDir: /workspace
+          env:
+            - name: DYN_SYSTEM_PORT
+              value: "9090"
+          command:
+            - python3
+            - -m
+            - dynamo.router
+          args:
+            - --endpoint
+            - ${K8S_NAMESPACE}-gp-vllm-model-b-prefill-0.prefill.generate
+            - --router-block-size
+            - "16"
+            - --no-router-track-active-blocks
+    VllmPrefillWorker:
+      envFromSecret: hf-token-secret
+      componentType: worker
+      subComponentType: prefill
+      replicas: 1
+      resources:
+        limits:
+          gpu: "1"
+        requests:
+          custom:
+            ephemeral-storage: "2Gi"
+      extraPodSpec:
+        runtimeClassName: nvidia
+        nodeSelector:
+          ucloud.dk/gpu: "true"
+        volumes:
+          - name: hf-model-cache
+            persistentVolumeClaim:
+              claimName: hf-model-cache-vllm-two-models
+        mainContainer:
+          image: ${DYNAMO_VLLM_IMAGE}
+          workingDir: /workspace/examples/backends/vllm
+          command:
+            - python3
+            - -m
+            - dynamo.vllm
+          args:
+            - --model
+            - ${MODEL_B}
+            - --tensor-parallel-size
+            - "1"
+            - --disaggregation-mode
+            - prefill
+            - --kv-transfer-config
+            - '{"kv_connector":"NixlConnector","kv_role":"kv_both"}'
+          volumeMounts:
+            - name: hf-model-cache
+              mountPath: /home/dynamo/.cache/huggingface/hub
+    Planner:
+      componentType: planner
+      replicas: 1
+      extraPodSpec:
+        volumes:
+          - name: planner-profile-results
+            emptyDir: {}
+        initContainers:
+          - name: planner-profile-results-init
+            image: ${DYNAMO_IMAGE}
+            command:
+              - /bin/sh
+              - -lc
+            args:
+              - |
+                set -eu
+                mkdir -p "${PROFILE_RESULTS_STAGING_ROOT}/${MODEL_B_PROFILE_RESULTS_ALIAS_NAME}"
+                cp -R "${MODEL_B_PROFILE_RESULTS_SOURCE_DIR}/." "${PROFILE_RESULTS_STAGING_ROOT}/${MODEL_B_PROFILE_RESULTS_ALIAS_NAME}/"
+            volumeMounts:
+              - name: planner-profile-results
+                mountPath: ${PROFILE_RESULTS_STAGING_ROOT}
+        mainContainer:
+          image: ${DYNAMO_IMAGE}
+          volumeMounts:
+            - name: planner-profile-results
+              mountPath: ${PROFILE_RESULTS_STAGING_ROOT}
+          command:
+            - python3
+            - -m
+            - dynamo.planner
+          args:
+            - --config
+            - '{"environment":"global-planner","global_planner_namespace":"${K8S_NAMESPACE}-gp-vllm-ctrl","backend":"vllm","mode":"prefill","enable_load_scaling":false,"enable_throughput_scaling":true,"throughput_metrics_source":"router","ttft":2000,"max_gpu_budget":-1,"prefill_engine_num_gpu":1,"model_name":"${MODEL_B}","profile_results_dir":"${MODEL_B_PROFILE_RESULTS_DIR}"}'
+---
+apiVersion: nvidia.com/v1alpha1
+kind: DynamoGraphDeployment
+metadata:
+  name: gp-vllm-model-b-prefill-1
+  namespace: ${K8S_NAMESPACE}
+spec:
+  services:
+    LocalRouter:
+      componentType: default
+      replicas: 1
+      extraPodSpec:
+        mainContainer:
+          image: ${DYNAMO_IMAGE}
+          workingDir: /workspace
+          env:
+            - name: DYN_SYSTEM_PORT
+              value: "9090"
+          command:
+            - python3
+            - -m
+            - dynamo.router
+          args:
+            - --endpoint
+            - ${K8S_NAMESPACE}-gp-vllm-model-b-prefill-1.prefill.generate
+            - --router-block-size
+            - "16"
+            - --no-router-track-active-blocks
+    VllmPrefillWorker:
+      envFromSecret: hf-token-secret
+      componentType: worker
+      subComponentType: prefill
+      replicas: 1
+      resources:
+        limits:
+          gpu: "2"
+        requests:
+          custom:
+            ephemeral-storage: "2Gi"
+      extraPodSpec:
+        runtimeClassName: nvidia
+        nodeSelector:
+          ucloud.dk/gpu: "true"
+        volumes:
+          - name: hf-model-cache
+            persistentVolumeClaim:
+              claimName: hf-model-cache-vllm-two-models
+        mainContainer:
+          image: ${DYNAMO_VLLM_IMAGE}
+          workingDir: /workspace/examples/backends/vllm
+          command:
+            - python3
+            - -m
+            - dynamo.vllm
+          args:
+            - --model
+            - ${MODEL_B}
+            - --tensor-parallel-size
+            - "2"
+            - --disaggregation-mode
+            - prefill
+            - --kv-transfer-config
+            - '{"kv_connector":"NixlConnector","kv_role":"kv_both"}'
+          volumeMounts:
+            - name: hf-model-cache
+              mountPath: /home/dynamo/.cache/huggingface/hub
+    Planner:
+      componentType: planner
+      replicas: 1
+      extraPodSpec:
+        volumes:
+          - name: planner-profile-results
+            emptyDir: {}
+        initContainers:
+          - name: planner-profile-results-init
+            image: ${DYNAMO_IMAGE}
+            command:
+              - /bin/sh
+              - -lc
+            args:
+              - |
+                set -eu
+                mkdir -p "${PROFILE_RESULTS_STAGING_ROOT}/${MODEL_B_PROFILE_RESULTS_ALIAS_NAME}"
+                cp -R "${MODEL_B_PROFILE_RESULTS_SOURCE_DIR}/." "${PROFILE_RESULTS_STAGING_ROOT}/${MODEL_B_PROFILE_RESULTS_ALIAS_NAME}/"
+            volumeMounts:
+              - name: planner-profile-results
+                mountPath: ${PROFILE_RESULTS_STAGING_ROOT}
+        mainContainer:
+          image: ${DYNAMO_IMAGE}
+          volumeMounts:
+            - name: planner-profile-results
+              mountPath: ${PROFILE_RESULTS_STAGING_ROOT}
+          command:
+            - python3
+            - -m
+            - dynamo.planner
+          args:
+            - --config
+            - '{"environment":"global-planner","global_planner_namespace":"${K8S_NAMESPACE}-gp-vllm-ctrl","backend":"vllm","mode":"prefill","enable_load_scaling":false,"enable_throughput_scaling":true,"throughput_metrics_source":"router","ttft":2000,"max_gpu_budget":-1,"prefill_engine_num_gpu":2,"model_name":"${MODEL_B}","profile_results_dir":"${MODEL_B_PROFILE_RESULTS_DIR}"}'
+---
+apiVersion: nvidia.com/v1alpha1
+kind: DynamoGraphDeployment
+metadata:
+  name: gp-vllm-model-b-decode-0
+  namespace: ${K8S_NAMESPACE}
+spec:
+  services:
+    LocalRouter:
+      componentType: default
+      replicas: 1
+      extraPodSpec:
+        mainContainer:
+          image: ${DYNAMO_IMAGE}
+          workingDir: /workspace
+          env:
+            - name: DYN_SYSTEM_PORT
+              value: "9090"
+          command:
+            - python3
+            - -m
+            - dynamo.router
+          args:
+            - --endpoint
+            - ${K8S_NAMESPACE}-gp-vllm-model-b-decode-0.backend.generate
+            - --router-block-size
+            - "16"
+            - --router-kv-overlap-score-weight
+            - "0"
+    VllmDecodeWorker:
+      envFromSecret: hf-token-secret
+      componentType: worker
+      subComponentType: decode
+      replicas: 1
+      resources:
+        limits:
+          gpu: "1"
+        requests:
+          custom:
+            ephemeral-storage: "2Gi"
+      extraPodSpec:
+        runtimeClassName: nvidia
+        nodeSelector:
+          ucloud.dk/gpu: "true"
+        volumes:
+          - name: hf-model-cache
+            persistentVolumeClaim:
+              claimName: hf-model-cache-vllm-two-models
+        mainContainer:
+          image: ${DYNAMO_VLLM_IMAGE}
+          workingDir: /workspace/examples/backends/vllm
+          command:
+            - python3
+            - -m
+            - dynamo.vllm
+          args:
+            - --model
+            - ${MODEL_B}
+            - --tensor-parallel-size
+            - "1"
+            - --disaggregation-mode
+            - decode
+            - --kv-transfer-config
+            - '{"kv_connector":"NixlConnector","kv_role":"kv_both"}'
+          volumeMounts:
+            - name: hf-model-cache
+              mountPath: /home/dynamo/.cache/huggingface/hub
+    Planner:
+      componentType: planner
+      replicas: 1
+      extraPodSpec:
+        volumes:
+          - name: planner-profile-results
+            emptyDir: {}
+        initContainers:
+          - name: planner-profile-results-init
+            image: ${DYNAMO_IMAGE}
+            command:
+              - /bin/sh
+              - -lc
+            args:
+              - |
+                set -eu
+                mkdir -p "${PROFILE_RESULTS_STAGING_ROOT}/${MODEL_B_PROFILE_RESULTS_ALIAS_NAME}"
+                cp -R "${MODEL_B_PROFILE_RESULTS_SOURCE_DIR}/." "${PROFILE_RESULTS_STAGING_ROOT}/${MODEL_B_PROFILE_RESULTS_ALIAS_NAME}/"
+            volumeMounts:
+              - name: planner-profile-results
+                mountPath: ${PROFILE_RESULTS_STAGING_ROOT}
+        mainContainer:
+          image: ${DYNAMO_IMAGE}
+          volumeMounts:
+            - name: planner-profile-results
+              mountPath: ${PROFILE_RESULTS_STAGING_ROOT}
+          command:
+            - python3
+            - -m
+            - dynamo.planner
+          args:
+            - --config
+            - '{"environment":"global-planner","global_planner_namespace":"${K8S_NAMESPACE}-gp-vllm-ctrl","backend":"vllm","mode":"decode","enable_load_scaling":false,"enable_throughput_scaling":true,"throughput_metrics_source":"router","itl":200,"max_gpu_budget":-1,"decode_engine_num_gpu":1,"model_name":"${MODEL_B}","profile_results_dir":"${MODEL_B_PROFILE_RESULTS_DIR}"}'

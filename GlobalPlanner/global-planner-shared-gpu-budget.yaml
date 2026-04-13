@@ -1,0 +1,267 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+#
+# Shared GPU-budget example adapted to this repo's Dynamo 1.0.1 conventions.
+#
+# Architecture:
+# - DGD gp-ctrl: GlobalPlanner
+# - DGD model-a: Frontend + VllmPrefillWorker + VllmDecodeWorker + Planner
+# - DGD model-b: Frontend + aggregated VllmDecodeWorker + Planner
+#
+# Notes:
+# - The GlobalPlanner scope is implicit in v1: every DGD in the same Kubernetes
+#   namespace is visible to the shared planner because this example does not set
+#   --managed-namespaces.
+# - Dynamo 1.0.1 does not accept the upstream --max-total-gpus CLI flag on
+#   dynamo.global_planner, so this example enforces fixed per-model budgets via
+#   each model planner's max_gpu_budget setting instead.
+# - The disaggregated model-a planner stages the bundled profiling fixture into
+#   a dedicated alias directory under ${PROFILE_RESULTS_STAGING_ROOT} before
+#   startup.
+# - Both model DGDs mount the same RWX PVC for Hugging Face model cache.
+# - Each model has its own frontend service. This is not a single routed endpoint.
+#
+# Render and apply with:
+# envsubst < global-planner-shared-gpu-budget.yaml | kubectl apply -f -
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ${K8S_NAMESPACE}-planner
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: dynamo-platform-dynamo-operator-planner
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: ${K8S_NAMESPACE}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hf-model-cache
+  namespace: ${K8S_NAMESPACE}
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ${STORAGE_CLASS_NAME}
+  resources:
+    requests:
+      storage: 50Gi
+---
+# Control plane: one shared GlobalPlanner for namespace-wide planner discovery.
+apiVersion: nvidia.com/v1alpha1
+kind: DynamoGraphDeployment
+metadata:
+  name: gp-ctrl
+  namespace: ${K8S_NAMESPACE}
+spec:
+  services:
+    GlobalPlanner:
+      componentType: default
+      replicas: 1
+      extraPodSpec:
+        mainContainer:
+          image: ${DYNAMO_IMAGE}
+          command:
+            - python3
+            - -m
+            - dynamo.global_planner
+---
+apiVersion: nvidia.com/v1alpha1
+kind: DynamoGraphDeployment
+metadata:
+  name: model-a
+  namespace: ${K8S_NAMESPACE}
+spec:
+  services:
+    Frontend:
+      envFromSecret: hf-token-secret
+      componentType: frontend
+      replicas: 1
+      extraPodSpec:
+        mainContainer:
+          image: ${DYNAMO_IMAGE}
+          workingDir: /workspace
+          command:
+            - python3
+            - -m
+            - dynamo.frontend
+          args:
+            - --model-name
+            - ${MODEL_A}
+    VllmPrefillWorker:
+      envFromSecret: hf-token-secret
+      componentType: worker
+      subComponentType: prefill
+      replicas: 1
+      resources:
+        limits:
+          gpu: "1"
+        requests:
+          custom:
+            ephemeral-storage: "2Gi"
+      extraPodSpec:
+        runtimeClassName: nvidia
+        nodeSelector:
+          ucloud.dk/gpu: "true"
+        volumes:
+          - name: hf-model-cache
+            persistentVolumeClaim:
+              claimName: hf-model-cache
+        mainContainer:
+          image: ${DYNAMO_VLLM_IMAGE}
+          workingDir: /workspace/examples/backends/vllm
+          command:
+            - python3
+            - -m
+            - dynamo.vllm
+          args:
+            - --model
+            - ${MODEL_A}
+            - --disaggregation-mode
+            - prefill
+            - --kv-transfer-config
+            - '{"kv_connector":"NixlConnector","kv_role":"kv_both"}'
+          volumeMounts:
+            - name: hf-model-cache
+              mountPath: /home/dynamo/.cache/huggingface/hub
+    VllmDecodeWorker:
+      envFromSecret: hf-token-secret
+      componentType: worker
+      subComponentType: decode
+      replicas: 1
+      resources:
+        limits:
+          gpu: "1"
+        requests:
+          custom:
+            ephemeral-storage: "2Gi"
+      extraPodSpec:
+        runtimeClassName: nvidia
+        nodeSelector:
+          ucloud.dk/gpu: "true"
+        volumes:
+          - name: hf-model-cache
+            persistentVolumeClaim:
+              claimName: hf-model-cache
+        mainContainer:
+          image: ${DYNAMO_VLLM_IMAGE}
+          workingDir: /workspace/examples/backends/vllm
+          command:
+            - python3
+            - -m
+            - dynamo.vllm
+          args:
+            - --model
+            - ${MODEL_A}
+            - --disaggregation-mode
+            - decode
+            - --kv-transfer-config
+            - '{"kv_connector":"NixlConnector","kv_role":"kv_both"}'
+          volumeMounts:
+            - name: hf-model-cache
+              mountPath: /home/dynamo/.cache/huggingface/hub
+    Planner:
+      componentType: planner
+      replicas: 1
+      extraPodSpec:
+        volumes:
+          - name: planner-profile-results
+            emptyDir: {}
+        initContainers:
+          - name: planner-profile-results-init
+            image: ${DYNAMO_IMAGE}
+            command:
+              - /bin/sh
+              - -lc
+            args:
+              - |
+                set -eu
+                mkdir -p "${PROFILE_RESULTS_STAGING_ROOT}/${MODEL_A_PROFILE_RESULTS_ALIAS_NAME}"
+                cp -R "${MODEL_A_PROFILE_RESULTS_SOURCE_DIR}/." "${PROFILE_RESULTS_STAGING_ROOT}/${MODEL_A_PROFILE_RESULTS_ALIAS_NAME}/"
+            volumeMounts:
+              - name: planner-profile-results
+                mountPath: ${PROFILE_RESULTS_STAGING_ROOT}
+        mainContainer:
+          image: ${DYNAMO_IMAGE}
+          volumeMounts:
+            - name: planner-profile-results
+              mountPath: ${PROFILE_RESULTS_STAGING_ROOT}
+          command:
+            - python3
+            - -m
+            - dynamo.planner
+          args:
+            - --config
+            - '{"environment":"global-planner","global_planner_namespace":"${K8S_NAMESPACE}-gp-ctrl","backend":"vllm","mode":"disagg","enable_load_scaling":false,"enable_throughput_scaling":true,"throughput_metrics_source":"router","ttft":2000,"itl":200,"max_gpu_budget":${MODEL_A_MAX_GPU_BUDGET},"prefill_engine_num_gpu":1,"decode_engine_num_gpu":1,"model_name":"${MODEL_A}","profile_results_dir":"${MODEL_A_PROFILE_RESULTS_DIR}"}'
+---
+apiVersion: nvidia.com/v1alpha1
+kind: DynamoGraphDeployment
+metadata:
+  name: model-b
+  namespace: ${K8S_NAMESPACE}
+spec:
+  services:
+    Frontend:
+      envFromSecret: hf-token-secret
+      componentType: frontend
+      replicas: 1
+      extraPodSpec:
+        mainContainer:
+          image: ${DYNAMO_IMAGE}
+          workingDir: /workspace
+          command:
+            - python3
+            - -m
+            - dynamo.frontend
+          args:
+            - --model-name
+            - ${MODEL_B}
+    VllmDecodeWorker:
+      envFromSecret: hf-token-secret
+      componentType: worker
+      subComponentType: decode
+      replicas: 1
+      resources:
+        limits:
+          gpu: "1"
+        requests:
+          custom:
+            ephemeral-storage: "2Gi"
+      extraPodSpec:
+        runtimeClassName: nvidia
+        nodeSelector:
+          ucloud.dk/gpu: "true"
+        volumes:
+          - name: hf-model-cache
+            persistentVolumeClaim:
+              claimName: hf-model-cache
+        mainContainer:
+          image: ${DYNAMO_VLLM_IMAGE}
+          workingDir: /workspace/examples/backends/vllm
+          command:
+            - python3
+            - -m
+            - dynamo.vllm
+          args:
+            - --model
+            - ${MODEL_B}
+          volumeMounts:
+            - name: hf-model-cache
+              mountPath: /home/dynamo/.cache/huggingface/hub
+    Planner:
+      componentType: planner
+      replicas: 1
+      extraPodSpec:
+        mainContainer:
+          image: ${DYNAMO_IMAGE}
+          command:
+            - python3
+            - -m
+            - dynamo.planner
+          args:
+            - --config
+            - '{"environment":"kubernetes","backend":"vllm","mode":"agg","enable_load_scaling":true,"enable_throughput_scaling":false,"ttft":2000,"itl":200,"max_gpu_budget":${MODEL_B_MAX_GPU_BUDGET},"decode_engine_num_gpu":1,"model_name":"${MODEL_B}"}'
