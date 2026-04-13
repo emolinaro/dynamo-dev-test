@@ -3,12 +3,10 @@
 This folder adapts the upstream Dynamo global planner examples into the same
 repo-local Kubernetes style used elsewhere in this repository.
 
-It currently includes two runnable patterns:
+It currently includes one runnable pattern:
 
 - `global-planner-shared-gpu-budget.yaml`: one shared `GlobalPlanner` plus two
   independent model DGDs, each with its own frontend
-- `global-planner-single-frontend-two-models.yaml`: one shared
-  frontend plus model-specific global-router and pool DGDs for two models
 
 ## Files
 
@@ -16,8 +14,6 @@ It currently includes two runnable patterns:
 |------|---------|
 | `global-planner-shared-gpu-budget.yaml` | `envsubst`-driven mixed-topology manifest containing the planner `ClusterRoleBinding`, shared RWX model-cache PVC, and the three DGDs (`gp-ctrl`, `model-a`, `model-b`) |
 | `cmd-gp-shared-gpu-budget.txt` | Render, validate, deploy, test, inspect, and delete flow for `global-planner-shared-gpu-budget.yaml` |
-| `global-planner-single-frontend-two-models.yaml` | Pool-based vLLM topology with one shared frontend, two model-specific global routers, and per-model prefill/decode pool DGDs |
-| `cmd-gp-single-frontend-two-models.txt` | Render, validate, deploy, test, inspect, and delete flow for the single-frontend pool example |
 
 ## Prerequisites
 
@@ -86,11 +82,7 @@ The planner expects `profile_results_dir` to contain:
 If those files are missing, the planner will fail during startup with the
 `FileNotFoundError` you saw from `perf_interpolation.py`.
 
-`cmd-gp-single-frontend-two-models.txt` uses the same image, namespace, and
-model variables, but still expects profiling directories for both models and
-does not set the per-model GPU budget variables.
-
-## Example 1: Shared GPU Budget
+## Shared GPU Budget
 
 This example keeps the control plane minimal while fitting a 3-GPU cluster:
 
@@ -144,41 +136,9 @@ To inspect this behavior under load:
 Use `kubectl get pods -n $K8S_NAMESPACE | rg 'gp-ctrl|model-a|model-b'` to
 find the pod names to inspect.
 
-## Example 2: Single Frontend
-
-This example follows the upstream `global-planner-vllm-test.yaml` pattern more
-closely, but duplicates the prefill/decode pool layout for two models while
-keeping a single shared frontend:
-
-- one `gp-vllm-ctrl` DGD with:
-  - one `Frontend`
-  - one `GlobalRouterModelA`
-  - one `GlobalRouterModelB`
-  - one `GlobalPlanner`
-- three pool DGDs for `MODEL_A`
-- three pool DGDs for `MODEL_B`
-
-The single frontend intentionally omits `--model-name`. The two global-router
-components register `MODEL_A` and `MODEL_B` in the same Dynamo namespace, so the
-frontend can expose both models from one endpoint.
-
-### Workflow
-
-1. Export your environment variables and render
-   `global-planner-single-frontend-two-models.yaml` with `envsubst`.
-2. Confirm the rendered file contains exactly 1 `ClusterRoleBinding`, 2
-   `ConfigMap`s, 1 PVC, and 7 `DynamoGraphDeployment` objects with no unresolved
-   `${...}` variables.
-3. Run `kubectl apply --dry-run=client` against the rendered manifest, then
-   `kubectl apply`.
-4. Wait for `gp-vllm-ctrl` and all six pool DGDs to reconcile.
-5. Port-forward `svc/gp-vllm-ctrl-frontend`, call `/v1/models`, and then send
-   one OpenAI-compatible chat completion for `MODEL_A` and one for `MODEL_B`
-   through the same frontend service.
-
 ## Notes
 
-- Both examples keep the global planner scope implicit. Because they do not pass
+- This example keeps the global planner scope implicit. Because it does not pass
   `--managed-namespaces`, all DGDs in the same Kubernetes namespace are visible
   to the shared `GlobalPlanner`.
 - `global-planner-shared-gpu-budget.yaml` uses both current vLLM command
@@ -187,9 +147,7 @@ frontend can expose both models from one endpoint.
     `--disaggregation-mode decode|prefill` plus
     `--kv-transfer-config '{"kv_connector":"NixlConnector","kv_role":"kv_both"}'`
   - `model-b` uses the aggregated syntax `python3 -m dynamo.vllm --model ...`
-- `global-planner-single-frontend-two-models.yaml` uses the Dynamo `1.0.1`
-  disaggregation syntax for all worker pools.
-- Both examples mount a shared RWX Hugging Face cache PVC into the worker pods at
+- The manifest mounts a shared RWX Hugging Face cache PVC into the worker pods at
   `/home/dynamo/.cache/huggingface/hub`.
 - `global-planner-shared-gpu-budget.yaml` is intentionally mixed-topology:
   `model-a` is disaggregated, while `model-b` uses a single aggregated vLLM
@@ -197,6 +155,3 @@ frontend can expose both models from one endpoint.
 - `global-planner-shared-gpu-budget.yaml` uses planner-side
   `max_gpu_budget` values because the current `dynamo.global_planner` CLI does
   not accept the upstream `--max-total-gpus` flag.
-- `global-planner-single-frontend-two-models.yaml` does not set fixed planner
-  budgets. If you need the budgeted variant, use
-  `global-planner-shared-gpu-budget.yaml`.
