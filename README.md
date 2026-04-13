@@ -7,7 +7,7 @@ Kubernetes manifests and quick commands for deploying **NVIDIA AI Dynamo** graph
 - Audio (Qwen2-Audio)
 - Video (LLaVA-NeXT-Video)
 - Profiler: SLA profiling examples for rapid and thorough DGDR (DynamoGraphDeploymentRequest) runs against Qwen3-0.6B — **runs only with disaggregated** (decode + prefill) deployments
-- GlobalPlanner: shared-budget and single-frontend multimodel global-planner examples
+- GlobalPlanner: shared-GPU-budget global-planner example
 - GenAI: repo-local generation examples adapted from the current Dynamo docs across vLLM-Omni, SGLang, and experimental TensorRT-LLM paths
 
 Each example family lives in its own folder and includes:
@@ -54,10 +54,8 @@ For more detail and a **comparison table** (local file-KV, Compose, K8s operator
   - `cmd.txt`: apply DGDR, watch request state, tail profiler job logs, and inspect the generated DGD
 - `GlobalPlanner/`
   - `global-planner-shared-gpu-budget.yaml`: shared GPU-budget manifest with one `gp-ctrl` DGD plus independent `model-a` and `model-b` DGDs
-  - `global-planner-single-frontend-two-models.yaml`: single-frontend pool-based vLLM manifest for two models behind one control-plane DGD
   - `cmd-gp-shared-gpu-budget.txt`: render, validate, deploy, inspect, test both frontends, and delete for the GPU-budget example
-  - `cmd-gp-single-frontend-two-models.txt`: render, validate, deploy, inspect, and test both models through one frontend
-  - `README.md`: prerequisites, environment variables, and behavior notes for both examples
+  - `README.md`: prerequisites, environment variables, and behavior notes
 - `GenAI/`
   - generation-focused examples adapted from the current Dynamo docs
   - `text-to-image/`
