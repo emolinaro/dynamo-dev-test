@@ -1,0 +1,139 @@
+# GAIE tenant example with two models in a disposable namespace.
+#
+# This script only manages namespace-scoped resources:
+# - Namespace
+# - RWX PVC
+# - Gateway
+# - optional hf-token-secret
+# - two DynamoGraphDeployments
+# - two HTTPRoutes
+#
+# Cluster-wide prerequisites are intentionally out of band:
+# - Gateway API CRDs
+# - GAIE CRDs
+# - kGateway controller + GatewayClass
+#
+# Safe teardown path for the whole tenant:
+#   kubectl delete namespace "$K8S_NAMESPACE"
+
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+export K8S_NAMESPACE=${K8S_NAMESPACE:-gaie-demo}
+export GAIE_GATEWAY_NAMESPACE=${GAIE_GATEWAY_NAMESPACE:-$K8S_NAMESPACE}
+export GAIE_GATEWAY_NAME=${GAIE_GATEWAY_NAME:-inference-gateway}
+export GAIE_GATEWAY_CLASS_NAME=${GAIE_GATEWAY_CLASS_NAME:-kgateway}
+export STORAGE_CLASS_NAME=${STORAGE_CLASS_NAME:-csi-cephfs-sc}
+export GAIE_CACHE_PVC_NAME=${GAIE_CACHE_PVC_NAME:-hf-model-cache}
+export GAIE_CACHE_PVC_SIZE=${GAIE_CACHE_PVC_SIZE:-50Gi}
+export GAIE_HF_SECRET_NAME=${GAIE_HF_SECRET_NAME:-hf-token-secret}
+export GAIE_DGD_MODEL_A=${GAIE_DGD_MODEL_A:-gp-gaie-model-a}
+export GAIE_DGD_MODEL_B=${GAIE_DGD_MODEL_B:-gp-gaie-model-b}
+export GAIE_HTTP_ROUTE_MODEL_A=${GAIE_HTTP_ROUTE_MODEL_A:-gp-gaie-model-a-route}
+export GAIE_HTTP_ROUTE_MODEL_B=${GAIE_HTTP_ROUTE_MODEL_B:-gp-gaie-model-b-route}
+export GAIE_HOST_MODEL_A=${GAIE_HOST_MODEL_A:-gp-gaie-model-a.example.com}
+export GAIE_HOST_MODEL_B=${GAIE_HOST_MODEL_B:-gp-gaie-model-b.example.com}
+export DYNAMO_VLLM_IMAGE=${DYNAMO_VLLM_IMAGE:-nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1}
+export DYNAMO_EPP_IMAGE=${DYNAMO_EPP_IMAGE:-nvcr.io/nvidia/ai-dynamo/dynamo-frontend:1.0.1}
+export MODEL_A=${MODEL_A:-meta-llama/Llama-3.2-3B-Instruct}
+export MODEL_B=${MODEL_B:-Qwen/Qwen2.5-7B-Instruct}
+export DYN_KV_CACHE_BLOCK_SIZE=${DYN_KV_CACHE_BLOCK_SIZE:-128}
+
+: "${STORAGE_CLASS_NAME:?Set STORAGE_CLASS_NAME to an RWX-capable StorageClass}"
+: "${DYNAMO_VLLM_IMAGE:?Set DYNAMO_VLLM_IMAGE}"
+: "${DYNAMO_EPP_IMAGE:?Set DYNAMO_EPP_IMAGE}"
+: "${GAIE_GATEWAY_NAME:?Set GAIE_GATEWAY_NAME}"
+: "${GAIE_GATEWAY_CLASS_NAME:?Set GAIE_GATEWAY_CLASS_NAME}"
+: "${GAIE_CACHE_PVC_NAME:?Set GAIE_CACHE_PVC_NAME}"
+: "${GAIE_CACHE_PVC_SIZE:?Set GAIE_CACHE_PVC_SIZE}"
+: "${GAIE_HF_SECRET_NAME:?Set GAIE_HF_SECRET_NAME}"
+
+RENDER_BASE=/tmp/gaie-tenant-base.rendered.yaml
+RENDER_A=/tmp/gaie-model-a-disagg.rendered.yaml
+RENDER_B=/tmp/gaie-model-b-agg.rendered.yaml
+RENDER_RTA=/tmp/gaie-http-route-model-a.rendered.yaml
+RENDER_RTB=/tmp/gaie-http-route-model-b.rendered.yaml
+
+# 1) Render and sanity-check
+envsubst < gaie-tenant-base.yaml > "$RENDER_BASE"
+envsubst < gaie-model-a-disagg.yaml > "$RENDER_A"
+envsubst < gaie-model-b-agg.yaml > "$RENDER_B"
+envsubst < http-route-model-a.yaml > "$RENDER_RTA"
+envsubst < http-route-model-b.yaml > "$RENDER_RTB"
+
+for f in "$RENDER_BASE" "$RENDER_A" "$RENDER_B" "$RENDER_RTA" "$RENDER_RTB"; do
+  ! rg -n '\$\{[A-Z_][A-Z0-9_]*\}' "$f"
+done
+
+! rg -n '^  name:\s*$|^\s+storage:\s*$|^\s+gatewayClassName:\s*$' "$RENDER_BASE"
+
+test "$(rg -c '^kind: Namespace$' "$RENDER_BASE")" = 1
+test "$(rg -c '^kind: PersistentVolumeClaim$' "$RENDER_BASE")" = 1
+test "$(rg -c '^kind: Gateway$' "$RENDER_BASE")" = 1
+test "$(rg -c '^kind: DynamoGraphDeployment$' "$RENDER_A")" = 1
+test "$(rg -c '^kind: DynamoGraphDeployment$' "$RENDER_B")" = 1
+test "$(rg -c '^kind: HTTPRoute$' "$RENDER_RTA")" = 1
+test "$(rg -c '^kind: HTTPRoute$' "$RENDER_RTB")" = 1
+
+# 2) Apply namespace-scoped tenant base
+# This requires the cluster-global GAIE prerequisites to already exist.
+kubectl get crd gateways.gateway.networking.k8s.io >/dev/null
+kubectl get crd httproutes.gateway.networking.k8s.io >/dev/null
+kubectl api-resources --api-group=inference.networking.k8s.io | rg '^inferencepools' >/dev/null
+kubectl get gatewayclass "$GAIE_GATEWAY_CLASS_NAME" >/dev/null
+kubectl get crd dynamographdeployments.nvidia.com -o yaml | rg 'frontendSidecar:' >/dev/null || {
+  cat >&2 <<'EOF'
+GAIE preflight failed: the installed DynamoGraphDeployment CRD does not support
+the `frontendSidecar` field.
+
+The current official GAIE examples use `frontendSidecar` for worker frontends.
+This repo's manual extra-container workaround can render and start pods, but it
+does not reliably produce a working GAIE deployment with the current EPP image
+and has been observed to fail during EPP router initialization
+(`create_routers failed with code 3`).
+
+Please use a Dynamo/operator build whose DGD CRD includes `frontendSidecar`
+support before using this GAIE example.
+EOF
+  exit 1
+}
+
+# If the checks above fail, run:
+#   bash cmd-gaie-cluster-prereqs.txt
+kubectl apply --dry-run=client -f "$RENDER_BASE"
+kubectl apply -f "$RENDER_BASE"
+
+# 3) Create/update the HF token secret in the controlled namespace if HF_TOKEN is set.
+# Otherwise require the secret to already exist there.
+if [[ -n "${HF_TOKEN:-}" ]]; then
+  kubectl -n "$K8S_NAMESPACE" create secret generic "$GAIE_HF_SECRET_NAME" \
+    --from-literal=HF_TOKEN="$HF_TOKEN" \
+    --from-literal=HUGGING_FACE_HUB_TOKEN="$HF_TOKEN" \
+    --dry-run=client -o yaml | kubectl apply -f -
+else
+  kubectl -n "$K8S_NAMESPACE" get secret "$GAIE_HF_SECRET_NAME" >/dev/null
+fi
+
+# 4) Apply DGDs, then HTTPRoutes
+kubectl apply --dry-run=client -f "$RENDER_A" -f "$RENDER_B"
+kubectl apply --dry-run=server -f "$RENDER_A" -f "$RENDER_B"
+kubectl apply -f "$RENDER_A" -f "$RENDER_B"
+kubectl apply --dry-run=client -f "$RENDER_RTA" -f "$RENDER_RTB"
+kubectl apply --dry-run=server -f "$RENDER_RTA" -f "$RENDER_RTB"
+kubectl apply -f "$RENDER_RTA" -f "$RENDER_RTB"
+
+# 5) Inspect
+kubectl -n "$K8S_NAMESPACE" get gateway "$GAIE_GATEWAY_NAME"
+kubectl -n "$K8S_NAMESPACE" get pvc "$GAIE_CACHE_PVC_NAME"
+kubectl -n "$K8S_NAMESPACE" get dynamographdeployment "$GAIE_DGD_MODEL_A" "$GAIE_DGD_MODEL_B"
+kubectl -n "$K8S_NAMESPACE" get inferencepool 2>/dev/null || true
+kubectl -n "$K8S_NAMESPACE" get httproute
+
+# 6) Test via gateway in the controlled namespace
+# kubectl -n "$K8S_NAMESPACE" port-forward svc/"$GAIE_GATEWAY_NAME" 8000:80
+# curl -s -H "Host: ${GAIE_HOST_MODEL_A}" http://127.0.0.1:8000/v1/models
+# curl -s -H "Host: ${GAIE_HOST_MODEL_B}" http://127.0.0.1:8000/v1/models
+
+# 7) Safe teardown
+# kubectl delete namespace "$K8S_NAMESPACE"

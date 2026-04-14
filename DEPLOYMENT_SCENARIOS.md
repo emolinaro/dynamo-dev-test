@@ -92,4 +92,4 @@ This is not the default recommendation for balanced workloads. The current disag
 | **Local single-machine (file or Compose)** | CLI workflows, small-scale validation, local debugging | Useful for understanding Dynamo, but not what this repo automates |
 | **Kubernetes operator-managed** | Declarative DGD/DGDR workflows on a cluster | Yes, this is the main target, including the shared-budget `GlobalPlanner` example |
 | **Kubernetes disaggregated (RDMA)** | Specialized high-performance prefill/decode separation | Partially, mainly through the profiler and disaggregated examples |
-| **Kubernetes + GAIE/kGateway** | Gateway-layer routing in front of Dynamo | Adjacent pattern; not what the manifests in this repo currently deploy |
+| **Kubernetes + GAIE/kGateway** | Gateway-layer routing in front of Dynamo | Yes, the repo now includes a tenant-scoped `GAIE/` example that keeps the gateway workload in a removable namespace once cluster prerequisites are installed |

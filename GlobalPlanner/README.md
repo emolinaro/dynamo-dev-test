@@ -3,10 +3,10 @@
 This folder adapts the upstream Dynamo global planner examples into the same
 repo-local Kubernetes style used elsewhere in this repository.
 
-It currently includes one runnable pattern:
+It currently includes:
 
-- `global-planner-shared-gpu-budget.yaml`: one shared `GlobalPlanner` plus two
-  independent model DGDs, each with its own frontend
+- **Shared GPU budget:** `global-planner-shared-gpu-budget.yaml` — one shared
+  `GlobalPlanner` plus two independent model DGDs, each with its own frontend.
 
 ## Files
 

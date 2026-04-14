@@ -1,0 +1,76 @@
+# One-time GAIE cluster prerequisites.
+#
+# This is the cluster-global layer. It is NOT removed when you delete a tenant
+# namespace created by cmd-gaie-two-models.txt.
+#
+# Installs:
+# - Gateway API CRDs
+# - Gateway API Inference Extension CRDs
+# - kGateway CRDs + controller in kgateway-system
+#
+# Verifies:
+# - Gateway API resources exist
+# - InferencePool API exists
+# - GatewayClass kgateway exists
+#
+# Based on the upstream install script:
+#   deploy/inference-gateway/scripts/install_gaie_crd_kgateway.sh
+
+set -euo pipefail
+
+export GATEWAY_API_VERSION=${GATEWAY_API_VERSION:-v1.4.1}
+export IGW_LATEST_RELEASE=${IGW_LATEST_RELEASE:-v1.2.1}
+export KGTW_VERSION=${KGTW_VERSION:-v2.1.1}
+export KGTW_NAMESPACE=${KGTW_NAMESPACE:-kgateway-system}
+export GAIE_GATEWAY_CLASS_NAME=${GAIE_GATEWAY_CLASS_NAME:-kgateway}
+export CONFIRM_CLUSTER_PREREQS=${CONFIRM_CLUSTER_PREREQS:-}
+
+cat <<EOF
+WARNING: This script installs cluster-global GAIE prerequisites.
+
+Cluster-scoped resources to be installed or updated:
+- Gateway API CRDs
+- Gateway API Inference Extension CRDs
+- GatewayClass-related support used by kGateway
+
+Namespaced controller installation target:
+- kGateway controller namespace: ${KGTW_NAMESPACE}
+
+These resources are NOT removed when you delete a tenant namespace created by
+cmd-gaie-two-models.txt.
+EOF
+
+if [[ "$CONFIRM_CLUSTER_PREREQS" != "yes" ]]; then
+  cat <<'EOF'
+
+Refusing to continue without explicit confirmation.
+
+Re-run with:
+  export CONFIRM_CLUSTER_PREREQS=yes
+  bash cmd-gaie-cluster-prereqs.txt
+EOF
+  exit 1
+fi
+
+# 1) Gateway API CRDs
+kubectl apply -f "https://github.com/kubernetes-sigs/gateway-api/releases/download/${GATEWAY_API_VERSION}/standard-install.yaml"
+
+# 2) Gateway API Inference Extension CRDs
+kubectl apply -f "https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${IGW_LATEST_RELEASE}/manifests.yaml"
+
+# 3) kGateway CRDs + controller
+helm upgrade -i --create-namespace --namespace "$KGTW_NAMESPACE" --version "$KGTW_VERSION" \
+  kgateway-crds oci://cr.kgateway.dev/kgateway-dev/charts/kgateway-crds
+
+helm upgrade -i --namespace "$KGTW_NAMESPACE" --version "$KGTW_VERSION" kgateway \
+  oci://cr.kgateway.dev/kgateway-dev/charts/kgateway \
+  --set inferenceExtension.enabled=true
+
+# 4) Verify cluster-global APIs and GatewayClass
+kubectl get crd gateways.gateway.networking.k8s.io
+kubectl get crd httproutes.gateway.networking.k8s.io
+kubectl api-resources --api-group=inference.networking.k8s.io | rg '^inferencepools'
+kubectl get gatewayclass "$GAIE_GATEWAY_CLASS_NAME"
+
+# 5) Inspect controller namespace
+kubectl -n "$KGTW_NAMESPACE" get deploy,pod

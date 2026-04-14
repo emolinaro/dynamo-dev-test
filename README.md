@@ -8,6 +8,7 @@ Kubernetes manifests and quick commands for deploying **NVIDIA AI Dynamo** graph
 - Video (LLaVA-NeXT-Video)
 - Profiler: SLA profiling examples for rapid and thorough DGDR (DynamoGraphDeploymentRequest) runs against Qwen3-0.6B — **runs only with disaggregated** (decode + prefill) deployments
 - GlobalPlanner: shared-GPU-budget global-planner example
+- GAIE: tenant-scoped Gateway API Inference Extension example for the same two models, designed to live in a removable namespace
 - GenAI: repo-local generation examples adapted from the current Dynamo docs across vLLM-Omni, SGLang, and experimental TensorRT-LLM paths
 
 Each example family lives in its own folder and includes:
@@ -56,6 +57,11 @@ For more detail and a **comparison table** (local file-KV, Compose, K8s operator
   - `global-planner-shared-gpu-budget.yaml`: shared GPU-budget manifest with one `gp-ctrl` DGD plus independent `model-a` and `model-b` DGDs
   - `cmd-gp-shared-gpu-budget.txt`: render, validate, deploy, inspect, test both frontends, and delete for the GPU-budget example
   - `README.md`: prerequisites, environment variables, and behavior notes
+- `GAIE/`
+  - tenant-scoped Gateway API Inference Extension setup for the same two models (`MODEL_A` disagg, `MODEL_B` agg)
+  - `gaie-tenant-base.yaml`: namespace + tenant gateway + RWX cache PVC
+  - `cmd-gaie-two-models.txt`: render, validate, deploy, inspect, and tear down the whole tenant namespace
+  - `README.md`: separates cluster-global prerequisites from the disposable namespace workflow
 - `GenAI/`
   - generation-focused examples adapted from the current Dynamo docs
   - `text-to-image/`

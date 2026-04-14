@@ -1,0 +1,243 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# GAIE (Gateway API Inference Extension) DynamoGraphDeployment for MODEL_A
+# (disaggregated prefill + decode), aligned with:
+# https://github.com/ai-dynamo/dynamo/blob/main/recipes/README.md#inference-gateway-gaie-integration-optional
+# and examples/backends/vllm/deploy/gaie/disagg.yaml
+# The direct frontend is modeled via extraPodSpec.containers because the
+# installed DGD v1alpha1 schema does not accept frontendSidecar.
+#
+# Render: envsubst < gaie-model-a-disagg.yaml | kubectl apply -f -
+# InferencePool name is ${GAIE_DGD_MODEL_A}-pool (operator default).
+
+apiVersion: nvidia.com/v1alpha1
+kind: DynamoGraphDeployment
+metadata:
+  name: ${GAIE_DGD_MODEL_A}
+  namespace: ${K8S_NAMESPACE}
+spec:
+  backendFramework: vllm
+  pvcs:
+    - name: ${GAIE_CACHE_PVC_NAME}
+      create: false
+  services:
+    Epp:
+      envFromSecret: ${GAIE_HF_SECRET_NAME}
+      componentType: epp
+      replicas: 1
+      extraPodSpec:
+        mainContainer:
+          image: ${DYNAMO_EPP_IMAGE}
+          env:
+            - name: DYN_KV_CACHE_BLOCK_SIZE
+              value: "${DYN_KV_CACHE_BLOCK_SIZE}"
+            - name: DYN_MODEL_NAME
+              value: "${MODEL_A}"
+            - name: DYN_ENFORCE_DISAGG
+              value: "true"
+      eppConfig:
+        config:
+          plugins:
+            - type: disagg-profile-handler
+            - name: prefill-filter
+              type: label-filter
+              parameters:
+                label: "nvidia.com/dynamo-sub-component-type"
+                validValues:
+                  - "prefill"
+                allowsNoLabel: false
+            - name: decode-filter
+              type: label-filter
+              parameters:
+                label: "nvidia.com/dynamo-sub-component-type"
+                validValues:
+                  - "decode"
+                allowsNoLabel: false
+            - name: picker
+              type: max-score-picker
+            - name: dyn-prefill
+              type: dyn-prefill-scorer
+            - name: dyn-decode
+              type: dyn-decode-scorer
+          schedulingProfiles:
+            - name: prefill
+              plugins:
+                - pluginRef: prefill-filter
+                  weight: 1
+                - pluginRef: dyn-prefill
+                  weight: 1
+                - pluginRef: picker
+                  weight: 1
+            - name: decode
+              plugins:
+                - pluginRef: decode-filter
+                  weight: 1
+                - pluginRef: dyn-decode
+                  weight: 1
+                - pluginRef: picker
+                  weight: 1
+    VllmPrefillWorker:
+      componentType: worker
+      subComponentType: prefill
+      envFromSecret: ${GAIE_HF_SECRET_NAME}
+      volumeMounts:
+        - name: ${GAIE_CACHE_PVC_NAME}
+          mountPoint: /home/dynamo/.cache/huggingface/hub
+      sharedMemory:
+        size: 4Gi
+      extraPodSpec:
+        runtimeClassName: nvidia
+        nodeSelector:
+          ucloud.dk/gpu: "true"
+        affinity:
+          podAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                podAffinityTerm:
+                  labelSelector:
+                    matchExpressions:
+                      - key: nvidia.com/dynamo-component-type
+                        operator: In
+                        values:
+                          - worker
+                  topologyKey: kubernetes.io/hostname
+        containers:
+          - name: frontend-direct
+            image: ${DYNAMO_VLLM_IMAGE}
+            workingDir: /workspace
+            command:
+              - python3
+              - -m
+              - dynamo.frontend
+            args:
+              - --router-mode
+              - direct
+              - --discovery-backend
+              - kubernetes
+            env:
+              - name: DYN_COMPONENT
+                value: worker
+              - name: DYN_DISCOVERY_BACKEND
+                value: kubernetes
+              - name: DYN_NAMESPACE
+                value: ${K8S_NAMESPACE}-${GAIE_DGD_MODEL_A}
+              - name: DYN_PARENT_DGD_K8S_NAME
+                value: ${GAIE_DGD_MODEL_A}
+              - name: DYN_PARENT_DGD_K8S_NAMESPACE
+                value: ${K8S_NAMESPACE}
+              - name: POD_NAME
+                valueFrom:
+                  fieldRef:
+                    apiVersion: v1
+                    fieldPath: metadata.name
+              - name: POD_NAMESPACE
+                valueFrom:
+                  fieldRef:
+                    apiVersion: v1
+                    fieldPath: metadata.namespace
+              - name: POD_UID
+                valueFrom:
+                  fieldRef:
+                    apiVersion: v1
+                    fieldPath: metadata.uid
+            envFrom:
+              - secretRef:
+                  name: ${GAIE_HF_SECRET_NAME}
+        mainContainer:
+          image: ${DYNAMO_VLLM_IMAGE}
+          workingDir: /workspace/examples/backends/vllm
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - "python3 -m dynamo.vllm --model ${MODEL_A} --served-model-name ${MODEL_A} --tensor-parallel-size 1 --data-parallel-size 1 --disaggregation-mode prefill --kv-transfer-config '{\"kv_connector\":\"NixlConnector\",\"kv_role\":\"kv_both\"}' --gpu-memory-utilization 0.90 --enable-prefix-caching --block-size ${DYN_KV_CACHE_BLOCK_SIZE} --kv-events-config '{\"enable_kv_cache_events\":true}'"
+      replicas: 1
+      resources:
+        limits:
+          gpu: "1"
+        requests:
+          custom:
+            ephemeral-storage: "2Gi"
+    VllmDecodeWorker:
+      componentType: worker
+      subComponentType: decode
+      envFromSecret: ${GAIE_HF_SECRET_NAME}
+      volumeMounts:
+        - name: ${GAIE_CACHE_PVC_NAME}
+          mountPoint: /home/dynamo/.cache/huggingface/hub
+      sharedMemory:
+        size: 4Gi
+      extraPodSpec:
+        runtimeClassName: nvidia
+        nodeSelector:
+          ucloud.dk/gpu: "true"
+        affinity:
+          podAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                podAffinityTerm:
+                  labelSelector:
+                    matchExpressions:
+                      - key: nvidia.com/dynamo-component-type
+                        operator: In
+                        values:
+                          - worker
+                  topologyKey: kubernetes.io/hostname
+        containers:
+          - name: frontend-direct
+            image: ${DYNAMO_VLLM_IMAGE}
+            workingDir: /workspace
+            command:
+              - python3
+              - -m
+              - dynamo.frontend
+            args:
+              - --router-mode
+              - direct
+              - --discovery-backend
+              - kubernetes
+            env:
+              - name: DYN_COMPONENT
+                value: worker
+              - name: DYN_DISCOVERY_BACKEND
+                value: kubernetes
+              - name: DYN_NAMESPACE
+                value: ${K8S_NAMESPACE}-${GAIE_DGD_MODEL_A}
+              - name: DYN_PARENT_DGD_K8S_NAME
+                value: ${GAIE_DGD_MODEL_A}
+              - name: DYN_PARENT_DGD_K8S_NAMESPACE
+                value: ${K8S_NAMESPACE}
+              - name: POD_NAME
+                valueFrom:
+                  fieldRef:
+                    apiVersion: v1
+                    fieldPath: metadata.name
+              - name: POD_NAMESPACE
+                valueFrom:
+                  fieldRef:
+                    apiVersion: v1
+                    fieldPath: metadata.namespace
+              - name: POD_UID
+                valueFrom:
+                  fieldRef:
+                    apiVersion: v1
+                    fieldPath: metadata.uid
+            envFrom:
+              - secretRef:
+                  name: ${GAIE_HF_SECRET_NAME}
+        mainContainer:
+          image: ${DYNAMO_VLLM_IMAGE}
+          workingDir: /workspace/examples/backends/vllm
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - "python3 -m dynamo.vllm --model ${MODEL_A} --served-model-name ${MODEL_A} --tensor-parallel-size 1 --data-parallel-size 1 --disaggregation-mode decode --kv-transfer-config '{\"kv_connector\":\"NixlConnector\",\"kv_role\":\"kv_both\"}' --gpu-memory-utilization 0.90 --enable-prefix-caching --block-size ${DYN_KV_CACHE_BLOCK_SIZE} --kv-events-config '{\"enable_kv_cache_events\":true}'"
+      replicas: 1
+      resources:
+        limits:
+          gpu: "1"
+        requests:
+          custom:
+            ephemeral-storage: "2Gi"

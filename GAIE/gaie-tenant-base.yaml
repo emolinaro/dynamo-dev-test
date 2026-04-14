@@ -1,0 +1,41 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Disposable tenant namespace for the GAIE example.
+# This manifest intentionally contains only namespace-scoped resources:
+# - Namespace
+# - RWX PVC for model cache
+# - Gateway bound to an existing cluster-wide GatewayClass
+#
+# Safe teardown path:
+#   kubectl delete namespace ${K8S_NAMESPACE}
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ${K8S_NAMESPACE}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ${GAIE_CACHE_PVC_NAME}
+  namespace: ${K8S_NAMESPACE}
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ${STORAGE_CLASS_NAME}
+  resources:
+    requests:
+      storage: ${GAIE_CACHE_PVC_SIZE}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: ${GAIE_GATEWAY_NAME}
+  namespace: ${K8S_NAMESPACE}
+spec:
+  gatewayClassName: ${GAIE_GATEWAY_CLASS_NAME}
+  listeners:
+    - name: http
+      port: 80
+      protocol: HTTP

@@ -1,0 +1,96 @@
+# GAIE cluster-global removal helper.
+#
+# Use this only if you want to undo the shared GAIE/kGateway installation layer.
+#
+# Safe default for normal cleanup:
+#   kubectl delete namespace <tenant-namespace>
+#
+# This script can remove:
+# - optional tenant namespaces you list explicitly
+# - kGateway Helm releases in KGTW_NAMESPACE
+# - optional GatewayClass
+# - optional GAIE CRDs
+# - optional Gateway API CRDs
+#
+# IMPORTANT:
+# - Removing CRDs is cluster-disruptive if anything else still uses them.
+# - By default, CRDs are left in place.
+
+set -euo pipefail
+
+export GATEWAY_API_VERSION=${GATEWAY_API_VERSION:-v1.4.1}
+export IGW_LATEST_RELEASE=${IGW_LATEST_RELEASE:-v1.2.1}
+export KGTW_NAMESPACE=${KGTW_NAMESPACE:-kgateway-system}
+export GAIE_GATEWAY_CLASS_NAME=${GAIE_GATEWAY_CLASS_NAME:-kgateway}
+export GAIE_TENANT_NAMESPACES=${GAIE_TENANT_NAMESPACES:-}
+export DELETE_KGTW_NAMESPACE=${DELETE_KGTW_NAMESPACE:-no}
+export REMOVE_GATEWAYCLASS=${REMOVE_GATEWAYCLASS:-yes}
+export REMOVE_GAIE_CRDS=${REMOVE_GAIE_CRDS:-no}
+export REMOVE_GATEWAY_API_CRDS=${REMOVE_GATEWAY_API_CRDS:-no}
+export CONFIRM_CLUSTER_REMOVE=${CONFIRM_CLUSTER_REMOVE:-}
+
+cat <<EOF
+WARNING: This script removes cluster-global GAIE installation components.
+
+It will target:
+- Helm releases in namespace: ${KGTW_NAMESPACE}
+- GatewayClass removal: ${REMOVE_GATEWAYCLASS}
+- GAIE CRD removal: ${REMOVE_GAIE_CRDS}
+- Gateway API CRD removal: ${REMOVE_GATEWAY_API_CRDS}
+- Tenant namespaces to delete first: ${GAIE_TENANT_NAMESPACES:-<none>}
+
+Recommended normal cleanup is still:
+  kubectl delete namespace <tenant-namespace>
+
+Use this script only when you want to roll back the shared GAIE/kGateway install.
+EOF
+
+if [[ "$CONFIRM_CLUSTER_REMOVE" != "yes" ]]; then
+  cat <<'EOF'
+
+Refusing to continue without explicit confirmation.
+
+Re-run with:
+  export CONFIRM_CLUSTER_REMOVE=yes
+  bash cmd-gaie-cluster-remove.txt
+EOF
+  exit 1
+fi
+
+# 1) Optionally delete known tenant namespaces first.
+if [[ -n "$GAIE_TENANT_NAMESPACES" ]]; then
+  for ns in $GAIE_TENANT_NAMESPACES; do
+    kubectl delete namespace "$ns" --ignore-not-found
+  done
+fi
+
+# 2) Remove Helm-managed kGateway releases.
+helm uninstall kgateway -n "$KGTW_NAMESPACE" 2>/dev/null || true
+helm uninstall kgateway-crds -n "$KGTW_NAMESPACE" 2>/dev/null || true
+
+# 3) Optionally remove the GatewayClass object.
+if [[ "$REMOVE_GATEWAYCLASS" == "yes" ]]; then
+  kubectl delete gatewayclass "$GAIE_GATEWAY_CLASS_NAME" --ignore-not-found 2>/dev/null || true
+fi
+
+# 4) Optionally remove the controller namespace after Helm uninstall.
+if [[ "$DELETE_KGTW_NAMESPACE" == "yes" ]]; then
+  kubectl delete namespace "$KGTW_NAMESPACE" --ignore-not-found
+fi
+
+# 5) Optionally remove GAIE CRDs and related cluster-scoped resources.
+if [[ "$REMOVE_GAIE_CRDS" == "yes" ]]; then
+  kubectl delete -f "https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${IGW_LATEST_RELEASE}/manifests.yaml" --ignore-not-found
+fi
+
+# 6) Optionally remove Gateway API CRDs.
+if [[ "$REMOVE_GATEWAY_API_CRDS" == "yes" ]]; then
+  kubectl delete -f "https://github.com/kubernetes-sigs/gateway-api/releases/download/${GATEWAY_API_VERSION}/standard-install.yaml" --ignore-not-found
+fi
+
+# 7) Inspect what remains.
+kubectl get gatewayclass 2>/dev/null || true
+kubectl get crd gateways.gateway.networking.k8s.io 2>/dev/null || true
+kubectl get crd httproutes.gateway.networking.k8s.io 2>/dev/null || true
+kubectl api-resources --api-group=inference.networking.k8s.io 2>/dev/null || true
+kubectl get ns "$KGTW_NAMESPACE" 2>/dev/null || true

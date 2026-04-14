@@ -1,0 +1,33 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# HTTPRoute for MODEL_B via GAIE. InferencePool: ${GAIE_DGD_MODEL_B}-pool
+#
+# Render: envsubst < http-route-model-b.yaml | kubectl apply -f -
+
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: ${GAIE_HTTP_ROUTE_MODEL_B}
+  namespace: ${K8S_NAMESPACE}
+spec:
+  hostnames:
+    - ${GAIE_HOST_MODEL_B}
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: ${GAIE_GATEWAY_NAME}
+      namespace: ${GAIE_GATEWAY_NAMESPACE}
+  rules:
+    - backendRefs:
+        - group: inference.networking.k8s.io
+          kind: InferencePool
+          name: ${GAIE_DGD_MODEL_B}-pool
+          port: 8000
+          weight: 1
+      matches:
+        - path:
+            type: PathPrefix
+            value: /
+      timeouts:
+        request: 300s
