@@ -3,7 +3,7 @@
 This folder contains a **tenant-scoped** GAIE example for the same two models
 used in the GlobalPlanner examples:
 
-- `MODEL_A`: disaggregated vLLM behind EPP
+- `MODEL_A`: aggregated vLLM behind EPP
 - `MODEL_B`: aggregated vLLM behind EPP
 
 The important boundary is:
@@ -66,7 +66,7 @@ its own namespace.
 | `cmd-gaie-cluster-prereqs.txt` | One-time cluster-global install for Gateway API, GAIE CRDs, and `kgateway` |
 | `cmd-gaie-cluster-remove.txt` | Cluster-global rollback helper for `kgateway` and, optionally, GAIE/Gateway API CRDs |
 | `gaie-tenant-base.yaml` | Namespace + RWX cache PVC + namespaced `Gateway` |
-| `gaie-model-a-disagg.yaml` | `MODEL_A` DGD with `Epp` + prefill/decode workers |
+| `gaie-model-a-agg.yaml` | `MODEL_A` DGD with `Epp` + aggregated worker |
 | `gaie-model-b-agg.yaml` | `MODEL_B` DGD with `Epp` + aggregated worker |
 | `http-route-model-a.yaml` | `HTTPRoute` for `${GAIE_DGD_MODEL_A}-pool` |
 | `http-route-model-b.yaml` | `HTTPRoute` for `${GAIE_DGD_MODEL_B}-pool` |
@@ -94,6 +94,8 @@ So the default shape is:
 - both `HTTPRoute`s in `gaie-demo`
 - both DGDs in `gaie-demo`
 - one tenant-local cache PVC in `gaie-demo`
+- both model DGDs follow the `v1.0.1` aggregated GAIE pattern using
+  `extraPodSpec.containers` for the direct worker frontend
 
 ## Controlled Namespace Workflow
 
@@ -193,12 +195,14 @@ APIs.
 - The GAIE command now defines both `DYNAMO_VLLM_IMAGE` and `DYNAMO_EPP_IMAGE`
   explicitly, so worker images and the EPP image can be overridden
   independently.
-- The current official GAIE examples still rely on `frontendSidecar` in the
-  DynamoGraphDeployment schema. If your installed DGD CRD does not support
-  `frontendSidecar`, this GAIE flow should be treated as unsupported on that
-  cluster version. The command script now fails fast on that mismatch instead
-  of deploying an EPP configuration that later crashes during router
-  initialization.
+- This tenant example now follows the `v1.0.1`
+  [aggregated GAIE example](https://github.com/ai-dynamo/dynamo/blob/v1.0.1/examples/backends/vllm/deploy/gaie/agg.yaml),
+  which models the worker-local direct frontend via `extraPodSpec.containers`
+  rather than `frontendSidecar`.
+- On the current cluster, the worker `main` containers are also pinned to the
+  base graph `DYN_NAMESPACE` with an empty `DYN_NAMESPACE_WORKER_SUFFIX` so
+  backend endpoint registration stays aligned with the namespace EPP uses for
+  router initialization.
 - The `HTTPRoute`s now default to the tenant `Gateway`, not to a shared gateway
   namespace.
 - This folder is intentionally separate from `GlobalPlanner/` now. GAIE is an

@@ -50,14 +50,14 @@ export DYN_KV_CACHE_BLOCK_SIZE=${DYN_KV_CACHE_BLOCK_SIZE:-128}
 : "${GAIE_HF_SECRET_NAME:?Set GAIE_HF_SECRET_NAME}"
 
 RENDER_BASE=/tmp/gaie-tenant-base.rendered.yaml
-RENDER_A=/tmp/gaie-model-a-disagg.rendered.yaml
+RENDER_A=/tmp/gaie-model-a-agg.rendered.yaml
 RENDER_B=/tmp/gaie-model-b-agg.rendered.yaml
 RENDER_RTA=/tmp/gaie-http-route-model-a.rendered.yaml
 RENDER_RTB=/tmp/gaie-http-route-model-b.rendered.yaml
 
 # 1) Render and sanity-check
 envsubst < gaie-tenant-base.yaml > "$RENDER_BASE"
-envsubst < gaie-model-a-disagg.yaml > "$RENDER_A"
+envsubst < gaie-model-a-agg.yaml > "$RENDER_A"
 envsubst < gaie-model-b-agg.yaml > "$RENDER_B"
 envsubst < http-route-model-a.yaml > "$RENDER_RTA"
 envsubst < http-route-model-b.yaml > "$RENDER_RTB"
@@ -82,22 +82,6 @@ kubectl get crd gateways.gateway.networking.k8s.io >/dev/null
 kubectl get crd httproutes.gateway.networking.k8s.io >/dev/null
 kubectl api-resources --api-group=inference.networking.k8s.io | rg '^inferencepools' >/dev/null
 kubectl get gatewayclass "$GAIE_GATEWAY_CLASS_NAME" >/dev/null
-kubectl get crd dynamographdeployments.nvidia.com -o yaml | rg 'frontendSidecar:' >/dev/null || {
-  cat >&2 <<'EOF'
-GAIE preflight failed: the installed DynamoGraphDeployment CRD does not support
-the `frontendSidecar` field.
-
-The current official GAIE examples use `frontendSidecar` for worker frontends.
-This repo's manual extra-container workaround can render and start pods, but it
-does not reliably produce a working GAIE deployment with the current EPP image
-and has been observed to fail during EPP router initialization
-(`create_routers failed with code 3`).
-
-Please use a Dynamo/operator build whose DGD CRD includes `frontendSidecar`
-support before using this GAIE example.
-EOF
-  exit 1
-}
 
 # If the checks above fail, run:
 #   bash cmd-gaie-cluster-prereqs.txt
@@ -130,10 +114,28 @@ kubectl -n "$K8S_NAMESPACE" get dynamographdeployment "$GAIE_DGD_MODEL_A" "$GAIE
 kubectl -n "$K8S_NAMESPACE" get inferencepool 2>/dev/null || true
 kubectl -n "$K8S_NAMESPACE" get httproute
 
-# 6) Test via gateway in the controlled namespace
-# kubectl -n "$K8S_NAMESPACE" port-forward svc/"$GAIE_GATEWAY_NAME" 8000:80
-# curl -s -H "Host: ${GAIE_HOST_MODEL_A}" http://127.0.0.1:8000/v1/models
-# curl -s -H "Host: ${GAIE_HOST_MODEL_B}" http://127.0.0.1:8000/v1/models
+# 6) Test via gateway in the controlled namespace (run manually; requires pods ready).
+#    Re-export the variables from the top of this file (or run the export block again),
+#    then copy each command after removing the leading "# ".
+#
+# kubectl get svc -n "$K8S_NAMESPACE"
+#
+# kubectl -n "$K8S_NAMESPACE" port-forward svc/"$GAIE_GATEWAY_NAME" 8080:80
+#
+# export GATEWAY_URL=http://127.0.0.1:8080
+#
+# curl -sS "$GATEWAY_URL/v1/models" -H "Host: $GAIE_HOST_MODEL_A" | jq .
+# curl -sS "$GATEWAY_URL/v1/models" -H "Host: $GAIE_HOST_MODEL_B" | jq .
+#
+# curl -sS "$GATEWAY_URL/v1/chat/completions" \
+#   -H "Host: $GAIE_HOST_MODEL_A" \
+#   -H "Content-Type: application/json" \
+#   -d "{\"model\":\"${MODEL_A}\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hello in one short sentence.\"}],\"max_tokens\":64,\"temperature\":0.2}"
+#
+# curl -sS "$GATEWAY_URL/v1/chat/completions" \
+#   -H "Host: $GAIE_HOST_MODEL_B" \
+#   -H "Content-Type: application/json" \
+#   -d "{\"model\":\"${MODEL_B}\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hello in one short sentence.\"}],\"max_tokens\":64,\"temperature\":0.2}"
 
 # 7) Safe teardown
 # kubectl delete namespace "$K8S_NAMESPACE"

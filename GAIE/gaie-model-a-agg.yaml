@@ -1,16 +1,17 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
-# GAIE DynamoGraphDeployment for MODEL_B (aggregated decode worker), aligned
+# GAIE DynamoGraphDeployment for MODEL_A (aggregated decode worker), aligned
 # with the v1.0.1 upstream aggregated example:
 # https://github.com/ai-dynamo/dynamo/blob/v1.0.1/examples/backends/vllm/deploy/gaie/agg.yaml
 #
-# Render: envsubst < gaie-model-b-agg.yaml | kubectl apply -f -
+# Render: envsubst < gaie-model-a-agg.yaml | kubectl apply -f -
+# InferencePool name is ${GAIE_DGD_MODEL_A}-pool (operator default).
 
 apiVersion: nvidia.com/v1alpha1
 kind: DynamoGraphDeployment
 metadata:
-  name: ${GAIE_DGD_MODEL_B}
+  name: ${GAIE_DGD_MODEL_A}
   namespace: ${K8S_NAMESPACE}
 spec:
   backendFramework: vllm
@@ -29,7 +30,7 @@ spec:
             - name: DYN_KV_CACHE_BLOCK_SIZE
               value: "${DYN_KV_CACHE_BLOCK_SIZE}"
             - name: DYN_MODEL_NAME
-              value: "${MODEL_B}"
+              value: "${MODEL_A}"
             - name: DYN_DECODE_FALLBACK
               value: "true"
       eppConfig:
@@ -68,6 +69,18 @@ spec:
         runtimeClassName: nvidia
         nodeSelector:
           ucloud.dk/gpu: "true"
+        affinity:
+          podAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                podAffinityTerm:
+                  labelSelector:
+                    matchExpressions:
+                      - key: nvidia.com/dynamo-component-type
+                        operator: In
+                        values:
+                          - worker
+                  topologyKey: kubernetes.io/hostname
         mainContainer:
           image: ${DYNAMO_VLLM_IMAGE}
           workingDir: /workspace/examples/backends/vllm
@@ -75,10 +88,10 @@ spec:
             - /bin/sh
             - -c
           args:
-            - "python3 -m dynamo.vllm --model ${MODEL_B} --served-model-name ${MODEL_B} --tensor-parallel-size 1 --data-parallel-size 1 --gpu-memory-utilization 0.90 --no-enable-prefix-caching --block-size ${DYN_KV_CACHE_BLOCK_SIZE}"
+            - "python3 -m dynamo.vllm --model ${MODEL_A} --served-model-name ${MODEL_A} --tensor-parallel-size 1 --data-parallel-size 1 --gpu-memory-utilization 0.90 --no-enable-prefix-caching --block-size ${DYN_KV_CACHE_BLOCK_SIZE}"
           env:
             - name: DYN_NAMESPACE
-              value: "${K8S_NAMESPACE}-${GAIE_DGD_MODEL_B}"
+              value: "${K8S_NAMESPACE}-${GAIE_DGD_MODEL_A}"
             - name: DYN_NAMESPACE_WORKER_SUFFIX
               value: ""
             - name: DYN_STORE_KV
@@ -107,13 +120,13 @@ spec:
               - name: DYN_HTTP_PORT
                 value: "8000"
               - name: DYN_NAMESPACE
-                value: "${K8S_NAMESPACE}-${GAIE_DGD_MODEL_B}"
+                value: "${K8S_NAMESPACE}-${GAIE_DGD_MODEL_A}"
               - name: DYN_COMPONENT
                 value: "frontend"
               - name: DYN_DISCOVERY_BACKEND
                 value: "kubernetes"
               - name: DYN_PARENT_DGD_K8S_NAME
-                value: "${GAIE_DGD_MODEL_B}"
+                value: "${GAIE_DGD_MODEL_A}"
               - name: DYN_PARENT_DGD_K8S_NAMESPACE
                 value: "${K8S_NAMESPACE}"
               - name: POD_NAME
