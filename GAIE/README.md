@@ -22,8 +22,8 @@ resources:
 - `PersistentVolumeClaim`
 - `Gateway`
 - optional `hf-token-secret`
-- `DynamoGraphDeployment`s
-- `HTTPRoute`s
+- `DynamoGraphDeployment`
+- `HTTPRoute`
 
 Deleting that namespace removes the whole example.
 
@@ -47,7 +47,9 @@ install:
 3. Install `kgateway` and its CRDs in `kgateway-system`
 4. Ensure a `GatewayClass` named `kgateway` exists
 
-This mirrors the upstream script:
+This follows the upstream GAIE cluster-prerequisite flow. The links below track
+current upstream install guidance, while the tenant manifests in this folder
+follow the `v1.0.1` aggregated example called out later in this README:
 
 - [install_gaie_crd_kgateway.sh](https://github.com/ai-dynamo/dynamo/blob/main/deploy/inference-gateway/scripts/install_gaie_crd_kgateway.sh)
 

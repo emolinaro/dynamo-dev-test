@@ -13,24 +13,32 @@ Kubernetes manifests and quick commands for deploying **NVIDIA AI Dynamo** graph
 
 Each example family lives in its own folder and includes:
 
-- A `cmd.txt` with a minimal deploy + test flow
+- A command helper file (`cmd.txt` or `cmd-*.txt`) with a minimal deploy + test flow
 - One or more `DynamoGraphDeployment` YAML manifests where the public docs provide a stable path
 
-**This repository targets the first scenario below** (Kubernetes + Dynamo operator + DGD).
+**This repository mainly targets the first scenario below** (Kubernetes + Dynamo
+operator + DGD), and it also includes a `GAIE/` example for the second
+scenario.
 
 ## Deployment scenarios
 
-Dynamo can be deployed in two main ways:
+This repository focuses on two Kubernetes-oriented deployment patterns:
 
 | Scenario | Use case | Characteristics |
 |----------|----------|-----------------|
-| **Kubernetes (Dynamo operator + DGD)** | Production-style cluster deployments | **Declarative deployments** via `DynamoGraphDeployment` (DGD) and `DynamoGraphDeploymentRequest` (DGDR). Autoscaling adapters, metrics integration (e.g. Prometheus), operator-managed lifecycle. This repo’s manifests and profiler follow this model. |
+| **Kubernetes (Dynamo operator + DGD)** | Production-style cluster deployments | **Declarative deployments** via `DynamoGraphDeployment` (DGD) and `DynamoGraphDeploymentRequest` (DGDR). Autoscaling adapters, metrics integration (e.g. Prometheus), operator-managed lifecycle. Most examples in this repo follow this model. |
 | **Kubernetes + GAIE/kGateway (Inference Gateway)** | K8s-native ingress + token-aware KV routing at the gateway | **Token-aware KV routing** in the gateway EPP; **header-based deterministic routing** to backends; aligns with the **Gateway API** model. Suited when routing and request affinity are handled at the ingress/gateway layer rather than purely by the operator. |
 
-- **Scenario 1** is what the examples in this repo assume: apply DGD/DGDR manifests, use the Dynamo operator, and optionally run the profiler for disaggregated SLA tuning.
-- **Scenario 2** adds an inference gateway (GAIE/kGateway) in front of the cluster for gateway-level routing and token-aware behavior; it complements rather than replaces DGD-based deployments.
+- **Scenario 1** is the main repo path: `Text/`, `Image/`, `Audio/`, `Video/`,
+  `Profiler/`, `GlobalPlanner/`, and most `GenAI/` examples assume DGD/DGDR
+  manifests managed by the Dynamo operator.
+- **Scenario 2** is represented by `GAIE/`, which adds an inference gateway
+  (GAIE/kGateway) in front of Dynamo-managed backends rather than replacing the
+  DGD-based deployment model.
 
-For more detail and a **comparison table** (local file-KV, Compose, K8s operator-managed, disaggregated RDMA, GAIE/kGateway), see **[DEPLOYMENT_SCENARIOS.md](DEPLOYMENT_SCENARIOS.md)**.
+For more detail and a broader **comparison table** covering local file-KV,
+Compose, K8s operator-managed, disaggregated RDMA, and GAIE/kGateway, see
+**[DEPLOYMENT_SCENARIOS.md](DEPLOYMENT_SCENARIOS.md)**.
 
 ## Repository layout
 
@@ -58,7 +66,7 @@ For more detail and a **comparison table** (local file-KV, Compose, K8s operator
   - `cmd-gp-shared-gpu-budget.txt`: render, validate, deploy, inspect, test both frontends, and delete for the GPU-budget example
   - `README.md`: prerequisites, environment variables, and behavior notes
 - `GAIE/`
-  - tenant-scoped Gateway API Inference Extension setup for the same two models (`MODEL_A` disagg, `MODEL_B` agg)
+  - tenant-scoped Gateway API Inference Extension setup for the same two models (`MODEL_A` agg, `MODEL_B` agg)
   - `gaie-tenant-base.yaml`: namespace + tenant gateway + RWX cache PVC
   - `cmd-gaie-two-models.txt`: render, validate, deploy, inspect, and tear down the whole tenant namespace
   - `README.md`: separates cluster-global prerequisites from the disposable namespace workflow
@@ -86,17 +94,18 @@ For more detail and a **comparison table** (local file-KV, Compose, K8s operator
 - A Hugging Face token Kubernetes secret referenced by the manifests:
   - `hf-token-secret`
 
-> **Install instructions:** **INSTALL_INSTRUCTIONS.md** now covers both fresh install and platform upgrade to Dynamo `v1.0.1` for the **Kubernetes + Dynamo operator + DGD** scenario, including the Helm value changes needed to upgrade an older `0.8.1` deployment safely, post-upgrade checks, and rollback steps. Run that flow before applying the manifests in this repo.
+> **Install instructions:** **INSTALL_INSTRUCTIONS.md** covers both fresh install and platform upgrade to Dynamo `v1.0.1` for the **Kubernetes + Dynamo operator + DGD** scenario, including the Helm value changes needed to upgrade an older `0.8.1` deployment safely, post-upgrade checks, and rollback steps. Run that flow before applying the manifests in this repo.
 
 > Note: Some multimodal examples prefer TCP request plane to avoid payload limits (see the image LLaVA manifest comments and `DYN_REQUEST_PLANE` usage).
 >
-> If UCX / RDMA is not available in your environment (for example, `nixl` cannot find RDMA devices), you can safely fall back to **TCP-only UCX** by setting the UCX-related env vars in the manifests (as shown in the Qwen vision/audio/video examples) so that UCX uses `tcp` instead of attempting RDMA transports.
+> If UCX / RDMA is not available in tested environment (for example, `nixl` cannot find RDMA devices), you can safely fall back to **TCP-only UCX** by setting the UCX-related env vars in the manifests (as shown in the Qwen vision/audio/video examples) so that UCX uses `tcp` instead of attempting RDMA transports.
 >
 > GenAI note: first startup can be slow because models are downloaded from Hugging Face, and transient `429 Too Many Requests` errors are possible. The `trtllm-video-diffusion/` example is also more sensitive to host GPU driver compatibility than the vLLM and SGLang examples.
 
 ## Quick start
 
-Pick a modality folder and run the commands in its `cmd.txt`.
+Pick an example folder and run the commands in its command helper file (`cmd.txt`
+or `cmd-*.txt`).
 
 Example (`Text`):
 

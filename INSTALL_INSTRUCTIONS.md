@@ -24,10 +24,7 @@ server-side-apply conflict seen when the old Grove operator is still rotating
 that secret.
 
 Because this repo uses `dynamo-operator.namespaceRestriction.enabled=true`, do
-not let the operator pod perform CRD creation during upgrade. The namespace-
-restricted service account cannot create new cluster-scoped CRDs. Apply the CRDs
-first as your own cluster identity, then run Helm with
-`dynamo-operator.upgradeCRD=false`.
+not let the operator pod perform CRD creation during upgrade. The namespace-restricted service account cannot create new cluster-scoped CRDs. Apply the CRDs manually first as your own cluster identity, then run Helm with `dynamo-operator.upgradeCRD=false`.
 
 ## Prerequisites: Hugging Face token and GPU nodes
 
@@ -234,16 +231,18 @@ helm uninstall "$RELEASE_NAME" -n "$NAMESPACE"
 ## Important follow-up for this repository
 
 Upgrading the platform does not automatically update the example graph manifests
-in this repo. Many of them still pin old runtime tags such as `0.8.1` and one
-LLaVA example pins `0.9.0`.
+in this repo. The examples pin their own runtime images independently of the
+platform install, so you should still verify the image tags you want before
+reapplying them after an upgrade.
 
 If you later need Grove for multinode orchestration, install or enable it
 separately after the platform upgrade instead of bundling it into this default
 platform flow.
 
 Before reapplying the example manifests from this repo, inspect the pinned image
-tags and bump them to the runtime version you actually want to run:
+tags across the example folders and adjust any that do not match the runtime
+version you actually want to run:
 
 ```bash
-rg -n 'nvcr.io/nvidia/ai-dynamo/.+:(0\\.8\\.1|0\\.9\\.0)' text image audio video profiler
+rg -n 'nvcr.io/nvidia/ai-dynamo/.+:[^"]+' Text Image Audio Video Profiler GlobalPlanner GAIE GenAI
 ```

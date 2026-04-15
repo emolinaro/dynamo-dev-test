@@ -1,6 +1,11 @@
 # Deployment Scenarios
 
-Updated against NVIDIA Dynamo documentation on March 31, 2026. This reflects the current `latest` docs for local install, Kubernetes deployment, operator behavior, and disaggregated serving, plus the current GAIE guide published under the Dynamo `dev` docs path.
+Updated against NVIDIA Dynamo documentation on March 31, 2026. This reflects
+the current `latest` docs for local install, Kubernetes deployment, operator
+behavior, and disaggregated serving, plus current upstream GAIE install
+guidance. The runnable `GAIE/` example in this repo intentionally keeps its
+tenant manifests aligned with the Dynamo `v1.0.1` aggregated pattern rather
+than a moving `dev` example set.
 
 ## Scenario Map
 
@@ -38,7 +43,11 @@ Updated against NVIDIA Dynamo documentation on March 31, 2026. This reflects the
 | **Observability** | Operator metrics are exposed via Prometheus and ServiceMonitor integration; Grafana dashboards are available. |
 | **Platform install** | Install CRDs and the `dynamo-platform` chart. The platform deploys the operator and core services such as etcd and NATS; multinode orchestrators are optional. |
 
-**This repository** is built for this scenario: the `text`, `image`, `audio`, `video`, `profiler`, and `GlobalPlanner` directories all assume operator-managed DGD or DGDR workflows on Kubernetes. The `GlobalPlanner` folder includes a shared-GPU-budget control-plane example.
+**This repository** is mostly built for this scenario: the `Text`, `Image`,
+`Audio`, `Video`, `Profiler`, `GlobalPlanner`, and most `GenAI` directories
+assume operator-managed DGD or DGDR workflows on Kubernetes. The
+`GlobalPlanner` folder includes a shared-GPU-budget control-plane example. The
+separate `GAIE/` directory is covered in Scenario 5.
 
 ### 4. Kubernetes disaggregated serving: RDMA-first specialized path
 
@@ -61,7 +70,7 @@ This is not the default recommendation for balanced workloads. The current disag
 | Aspect | Description |
 |--------|-------------|
 | **Gateway** | Integrates Dynamo with the Gateway API Inference Extension through kGateway. |
-| **Support scope** | The current GAIE guide says this setup supports both aggregated and disaggregated serving, and currently only supports the kGateway-based inference gateway. |
+| **Support scope** | The current GAIE guide says this setup supports both aggregated and disaggregated serving, and currently only supports the kGateway-based inference gateway. This repo's tenant example currently uses aggregated workers for both models. |
 | **Routing model** | Routing happens in the EPP, not in the Dynamo frontend. The frontend must run with `--router-mode direct` so it respects the worker selections passed in headers. |
 | **Backend relationship** | This complements operator-managed DGDs; the gateway sits in front of the Dynamo deployment rather than replacing it. |
 | **Important limitation** | The current GAIE guide explicitly says to deploy Dynamo without the Inference Gateway if you need LoRA. |
@@ -83,13 +92,19 @@ This is not the default recommendation for balanced workloads. The current disag
 - The operator now documents three concrete deployment modes: cluster-wide, namespace-scoped, and hybrid.
 - Multinode orchestration is optional and not installed by default with the platform chart; Grove + KAI Scheduler or LWS + Volcano are separate decisions.
 - The current disaggregated guide is much stricter about RDMA being required for good performance and recommends AIConfigurator for deciding between aggregated and disaggregated topologies.
-- The current GAIE guide is more specific that support is kGateway-only, uses EPP-side routing with `--router-mode direct`, and should be avoided if you need LoRA.
+- The current GAIE guidance is more specific that support is kGateway-only,
+  uses EPP-side routing with `--router-mode direct`, and should be avoided if
+  you need LoRA.
+- The current upstream GAIE install guidance moves faster than this repo's
+  runnable tenant manifests; cluster-prerequisite links track current upstream
+  docs, while the repo's GAIE manifests stay aligned with the `v1.0.1`
+  aggregated example.
 
 ## Summary
 
 | Scenario | Focus | Fit for this repo |
 |----------|-------|-------------------|
 | **Local single-machine (file or Compose)** | CLI workflows, small-scale validation, local debugging | Useful for understanding Dynamo, but not what this repo automates |
-| **Kubernetes operator-managed** | Declarative DGD/DGDR workflows on a cluster | Yes, this is the main target, including the shared-budget `GlobalPlanner` example |
+| **Kubernetes operator-managed** | Declarative DGD/DGDR workflows on a cluster | Yes, this is the main target, including `Text/`, `Image/`, `Audio/`, `Video/`, `Profiler/`, `GlobalPlanner/`, and most `GenAI/` examples |
 | **Kubernetes disaggregated (RDMA)** | Specialized high-performance prefill/decode separation | Partially, mainly through the profiler and disaggregated examples |
-| **Kubernetes + GAIE/kGateway** | Gateway-layer routing in front of Dynamo | Yes, the repo now includes a tenant-scoped `GAIE/` example that keeps the gateway workload in a removable namespace once cluster prerequisites are installed |
+| **Kubernetes + GAIE/kGateway** | Gateway-layer routing in front of Dynamo | Yes, the repo includes a tenant-scoped `GAIE/` example that keeps the gateway workload in a removable namespace once cluster prerequisites are installed |

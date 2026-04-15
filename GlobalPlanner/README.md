@@ -68,6 +68,32 @@ you need hardware-specific results, override
 `MODEL_A_PROFILE_RESULTS_SOURCE_DIR` with your real profiler output, or adjust
 the alias name and target directory before rendering the manifest.
 
+## How Profiling Data Is Used
+
+Upstream Dynamo's planner flow is:
+
+1. Run the profiler / DGDR workflow first.
+2. Collect the planner profiling artifacts produced by that workflow.
+3. Deploy the planner-enabled DGD using those artifacts.
+
+This repo's shared-budget example keeps that same dependency model, but it
+shortcuts the artifact-generation step for one model by staging a bundled
+fixture from inside the image.
+
+- `model-a` uses throughput-based disaggregated planning, so its planner expects
+  precomputed profile data at `MODEL_A_PROFILE_RESULTS_DIR`.
+- `model-b` uses load-based aggregated planning, so it does not consume offline
+  profile data in this example.
+- `gp-ctrl` runs only the shared `GlobalPlanner` coordinator; it does not
+  generate planner profile data itself.
+
+So `cmd-gp-shared-gpu-budget.txt` does **not** generate offline planner data.
+By default it copies the bundled Dynamo `v1.0.1` profiling fixture from
+`MODEL_A_PROFILE_RESULTS_SOURCE_DIR` into the staged path that `model-a`'s
+planner reads. If you want hardware-specific planning inputs, run the
+`Profiler/` workflow first and then point `MODEL_A_PROFILE_RESULTS_SOURCE_DIR`
+at your real profiling results before rendering the GlobalPlanner manifest.
+
 If you previously exported the old path
 `/workspace/components/src/dynamo/planner/tests/data/profiling_results/H100_TP1P_TP1D`
 in your shell, unset it before rendering again:
@@ -95,7 +121,10 @@ frontend services, not a single routed endpoint.
 
 ### Workflow
 
-1. Export your environment variables and render the manifest with `envsubst`.
+1. Export your environment variables. If you have real planner profiling
+   results for `model-a`, point `MODEL_A_PROFILE_RESULTS_SOURCE_DIR` at them
+   before rendering; otherwise the command stages the bundled fixture described
+   above.
 2. Confirm the rendered file contains exactly 1 `ClusterRoleBinding`, 1 PVC, and
    3 `DynamoGraphDeployment` objects with no unresolved `${...}` variables.
 3. Run `kubectl apply --dry-run=client` against the rendered manifest, then
