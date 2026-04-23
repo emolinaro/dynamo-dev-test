@@ -1,11 +1,11 @@
 # Deployment Scenarios
 
-Updated against NVIDIA Dynamo documentation on March 31, 2026. This reflects
-the current `latest` docs for local install, Kubernetes deployment, operator
-behavior, and disaggregated serving, plus current upstream GAIE install
-guidance. The runnable `GAIE/` example in this repo intentionally keeps its
-tenant manifests aligned with the Dynamo `v1.0.1` aggregated pattern rather
-than a moving `dev` example set.
+Updated against NVIDIA Dynamo documentation and the Dynamo v1.0.2 release notes
+on April 23, 2026. This reflects the current `latest` docs for local install,
+Kubernetes deployment, operator behavior, and disaggregated serving, plus
+current upstream GAIE install guidance. The runnable `GAIE/` example in this
+repo intentionally keeps its tenant manifests aligned with the Dynamo `v1.0.2`
+aggregated pattern rather than a moving `dev` example set.
 
 ## Scenario Map
 
@@ -97,7 +97,7 @@ This is not the default recommendation for balanced workloads. The current disag
   you need LoRA.
 - The current upstream GAIE install guidance moves faster than this repo's
   runnable tenant manifests; cluster-prerequisite links track current upstream
-  docs, while the repo's GAIE manifests stay aligned with the `v1.0.1`
+  docs, while the repo's GAIE manifests stay aligned with the `v1.0.2`
   aggregated example.
 
 ## Summary

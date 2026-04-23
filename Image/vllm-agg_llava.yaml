@@ -18,7 +18,7 @@ spec:
       extraPodSpec:
         # optional: keep frontend off GPU node by omitting nodeSelector
         mainContainer:
-          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.2
     VLMWorker:
       envFromSecret: hf-token-secret
       componentType: worker
@@ -37,7 +37,7 @@ spec:
           # Multimodal data (images) are decoded in the backend worker using ImageLoader
           # The vLLM backend no longer accepts --connector; aggregated serving uses
           # the default no-connector behavior automatically.
-          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.2
           workingDir: /workspace/examples/backends/vllm
           command:
             - python3

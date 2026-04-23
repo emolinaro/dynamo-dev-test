@@ -49,7 +49,7 @@ install:
 
 This follows the upstream GAIE cluster-prerequisite flow. The links below track
 current upstream install guidance, while the tenant manifests in this folder
-follow the `v1.0.1` aggregated example called out later in this README:
+follow the `v1.0.2` aggregated example called out later in this README:
 
 - [install_gaie_crd_kgateway.sh](https://github.com/ai-dynamo/dynamo/blob/main/deploy/inference-gateway/scripts/install_gaie_crd_kgateway.sh)
 
@@ -84,8 +84,8 @@ The command flow now defaults to a disposable namespace instead of
 - `GAIE_GATEWAY_NAME=inference-gateway`
 - `GAIE_GATEWAY_CLASS_NAME=kgateway`
 - `STORAGE_CLASS_NAME=csi-cephfs-sc`
-- `DYNAMO_VLLM_IMAGE=nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1`
-- `DYNAMO_EPP_IMAGE=nvcr.io/nvidia/ai-dynamo/dynamo-frontend:1.0.1`
+- `DYNAMO_VLLM_IMAGE=nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.2`
+- `DYNAMO_EPP_IMAGE=nvcr.io/nvidia/ai-dynamo/dynamo-frontend:1.0.2`
 - `GAIE_CACHE_PVC_NAME=hf-model-cache`
 - `GAIE_HF_SECRET_NAME=hf-token-secret`
 
@@ -96,7 +96,7 @@ So the default shape is:
 - both `HTTPRoute`s in `gaie-demo`
 - both DGDs in `gaie-demo`
 - one tenant-local cache PVC in `gaie-demo`
-- both model DGDs follow the `v1.0.1` aggregated GAIE pattern using
+- both model DGDs follow the `v1.0.2` aggregated GAIE pattern using
   `extraPodSpec.containers` for the direct worker frontend
 
 ## Controlled Namespace Workflow
@@ -197,8 +197,8 @@ APIs.
 - The GAIE command now defines both `DYNAMO_VLLM_IMAGE` and `DYNAMO_EPP_IMAGE`
   explicitly, so worker images and the EPP image can be overridden
   independently.
-- This tenant example now follows the `v1.0.1`
-  [aggregated GAIE example](https://github.com/ai-dynamo/dynamo/blob/v1.0.1/examples/backends/vllm/deploy/gaie/agg.yaml),
+- This tenant example now follows the `v1.0.2`
+  [aggregated GAIE example](https://github.com/ai-dynamo/dynamo/blob/v1.0.2/examples/backends/vllm/deploy/gaie/agg.yaml),
   which models the worker-local direct frontend via `extraPodSpec.containers`
   rather than `frontendSidecar`.
 - On the current cluster, the worker `main` containers are also pinned to the

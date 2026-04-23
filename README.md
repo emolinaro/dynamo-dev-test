@@ -57,7 +57,7 @@ Compose, K8s operator-managed, disaggregated RDMA, and GAIE/kGateway, see
   - `cmd.txt`: deploy + sample video chat request
 - `Profiler/`
   - Profiler runs **only with disaggregated** deployments (decode + prefill); aggregated graphs are not profiled.
-  - `disagg.yaml`: disaggregated vLLM graph (Frontend + decode + prefill workers) updated to `vllm-runtime:1.0.1`
+  - `disagg.yaml`: disaggregated vLLM graph (Frontend + decode + prefill workers) updated to `vllm-runtime:1.0.2`
   - `profile_sla_aic_dgdr.yaml`: `nvidia.com/v1beta1` DGDR using `searchStrategy: rapid`
   - `profile_sla_online_dgdr.yaml`: `nvidia.com/v1beta1` DGDR using `searchStrategy: thorough`
   - `cmd.txt`: apply DGDR, watch request state, tail profiler job logs, and inspect the generated DGD
@@ -94,7 +94,7 @@ Compose, K8s operator-managed, disaggregated RDMA, and GAIE/kGateway, see
 - A Hugging Face token Kubernetes secret referenced by the manifests:
   - `hf-token-secret`
 
-> **Install instructions:** **INSTALL_INSTRUCTIONS.md** covers both fresh install and platform upgrade to Dynamo `v1.0.1` for the **Kubernetes + Dynamo operator + DGD** scenario, including the Helm value changes needed to upgrade an older `0.8.1` deployment safely, post-upgrade checks, and rollback steps. Run that flow before applying the manifests in this repo.
+> **Install instructions:** **INSTALL_INSTRUCTIONS.md** covers both fresh install and platform upgrade to Dynamo `v1.0.2` for the **Kubernetes + Dynamo operator + DGD** scenario, including the Helm value changes needed to upgrade an older `0.8.1` deployment safely, post-upgrade checks, and rollback steps. Run that flow before applying the manifests in this repo.
 
 > Note: Some multimodal examples prefer TCP request plane to avoid payload limits (see the image LLaVA manifest comments and `DYN_REQUEST_PLANE` usage).
 >

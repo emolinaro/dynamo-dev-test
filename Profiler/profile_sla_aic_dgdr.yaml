@@ -1,4 +1,4 @@
-# Reference only for Dynamo 1.0.1 vLLM profiling.
+# Reference only for Dynamo 1.0.2 vLLM profiling.
 # As of April 1, 2026, the rapid/AIC path is not reliable for this vLLM flow:
 # the profiler can crash after AIC returns no valid candidate configs.
 # Use profile_sla_online_dgdr.yaml for actual runs.
@@ -11,7 +11,7 @@ metadata:
 spec:
   model: Qwen/Qwen3-0.6B
   backend: vllm
-  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1
+  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.2
   searchStrategy: rapid
   autoApply: true
   workload:
@@ -39,7 +39,7 @@ spec:
             replicas: 1
             extraPodSpec:
               mainContainer:
-                image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1
+                image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.2
           VllmDecodeWorker:
             envFromSecret: hf-token-secret
             componentType: worker
@@ -55,7 +55,7 @@ spec:
               nodeSelector:
                 ucloud.dk/gpu: "true"
               mainContainer:
-                image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1
+                image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.2
                 workingDir: /workspace/examples/backends/vllm
                 command:
                 - python3
@@ -83,7 +83,7 @@ spec:
               nodeSelector:
                 ucloud.dk/gpu: "true"
               mainContainer:
-                image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1
+                image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.2
                 workingDir: /workspace/examples/backends/vllm
                 command:
                 - python3

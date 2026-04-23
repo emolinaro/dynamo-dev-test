@@ -17,7 +17,7 @@ It currently includes:
 
 ## Prerequisites
 
-- Dynamo `1.0.1` installed on Kubernetes with the operator and CRDs available
+- Dynamo `1.0.2` installed on Kubernetes with the operator and CRDs available
 - target namespace available, usually `dynamo-system`
 - `hf-token-secret` present in that namespace
 - the operator-installed ClusterRole `dynamo-platform-dynamo-operator-planner`
@@ -50,11 +50,11 @@ It currently includes:
 
 If you do not have a separate base image for the frontend and planner, it is
 fine to point both `DYNAMO_IMAGE` and `DYNAMO_VLLM_IMAGE` at
-`nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1`, which matches the current repo
+`nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.2`, which matches the current repo
 examples.
 
 By default, the disaggregated `model-a` planner stages the bundled Dynamo
-`v1.0.1` profiling fixture into a dedicated alias directory inside the
+`v1.0.2` profiling fixture into a dedicated alias directory inside the
 container:
 
 - source fixture directory:
@@ -88,7 +88,7 @@ fixture from inside the image.
   generate planner profile data itself.
 
 So `cmd-gp-shared-gpu-budget.txt` does **not** generate offline planner data.
-By default it copies the bundled Dynamo `v1.0.1` profiling fixture from
+By default it copies the bundled Dynamo `v1.0.2` profiling fixture from
 `MODEL_A_PROFILE_RESULTS_SOURCE_DIR` into the staged path that `model-a`'s
 planner reads. If you want hardware-specific planning inputs, run the
 `Profiler/` workflow first and then point `MODEL_A_PROFILE_RESULTS_SOURCE_DIR`
@@ -142,7 +142,7 @@ This runtime does not accept the upstream `--max-total-gpus` CLI flag on
 __main__.py: error: unrecognized arguments: --max-total-gpus 4
 ```
 
-To keep the example runnable on Dynamo `1.0.1`, the shared-budget manifest now
+To keep the example runnable on Dynamo `1.0.2`, the shared-budget manifest now
 uses planner-side `max_gpu_budget` values instead. With the documented defaults
 `MODEL_A_MAX_GPU_BUDGET=2` and `MODEL_B_MAX_GPU_BUDGET=1`, the steady-state
 baseline is:
@@ -172,7 +172,7 @@ find the pod names to inspect.
   to the shared `GlobalPlanner`.
 - `global-planner-shared-gpu-budget.yaml` uses both current vLLM command
   shapes:
-  - `model-a` uses the Dynamo `1.0.1` disaggregation syntax
+  - `model-a` uses the Dynamo `1.0.2` disaggregation syntax
     `--disaggregation-mode decode|prefill` plus
     `--kv-transfer-config '{"kv_connector":"NixlConnector","kv_role":"kv_both"}'`
   - `model-b` uses the aggregated syntax `python3 -m dynamo.vllm --model ...`

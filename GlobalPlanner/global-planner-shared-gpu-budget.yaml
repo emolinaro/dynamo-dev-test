@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 #
-# Shared GPU-budget example adapted to this repo's Dynamo 1.0.1 conventions.
+# Shared GPU-budget example adapted to this repo's Dynamo 1.0.2 conventions.
 #
 # Architecture:
 # - DGD gp-ctrl: GlobalPlanner
@@ -13,7 +13,7 @@
 # - The GlobalPlanner scope is implicit in v1: every DGD in the same Kubernetes
 #   namespace is visible to the shared planner because this example does not set
 #   --managed-namespaces.
-# - Dynamo 1.0.1 does not accept the upstream --max-total-gpus CLI flag on
+# - Dynamo 1.0.2 does not accept the upstream --max-total-gpus CLI flag on
 #   dynamo.global_planner, so this example enforces fixed per-model budgets via
 #   each model planner's max_gpu_budget setting instead.
 # - The disaggregated model-a planner stages the bundled profiling fixture into

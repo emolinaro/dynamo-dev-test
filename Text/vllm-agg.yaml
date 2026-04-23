@@ -12,7 +12,7 @@ spec:
       extraPodSpec:
         # optional: keep frontend off GPU node by omitting nodeSelector
         mainContainer:
-          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.2
 
     VllmDecodeWorker:
       envFromSecret: hf-token-secret
@@ -35,7 +35,7 @@ spec:
         #   operator: "Exists"
         #   effect: "NoSchedule"
         mainContainer:
-          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.2
           workingDir: /workspace/examples/backends/vllm
           command: ["python3","-m","dynamo.vllm"]
           args: ["--model","Qwen/Qwen3-0.6B"]

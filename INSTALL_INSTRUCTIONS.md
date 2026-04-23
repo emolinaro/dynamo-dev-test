@@ -1,6 +1,6 @@
 # Dynamo Install / Upgrade Instructions
 
-This document installs Dynamo `v1.0.1` on a fresh cluster or upgrades an
+This document installs Dynamo `v1.0.2` on a fresh cluster or upgrades an
 existing `dynamo-platform` release, including the `0.8.1` layout that this repo
 originally documented.
 
@@ -13,7 +13,15 @@ The commands below preserve the current repo topology:
 - `csi-rbd-sc` storage class for etcd and NATS JetStream
 - Prometheus endpoint at `http://prometheus-server.monitoring.svc.cluster.local`
 
-Do not rely on `--reuse-values` for a `0.8.1 -> 1.0.1` upgrade. Several Helm
+Dynamo `v1.0.2` is a patch release over `v1.0.1`, so this repo does not need a
+new manifest shape for the default examples. The main deployment change here is
+to pin the platform chart and all example runtime images to `1.0.2`. The release
+also improves DGDR-generated DGD naming, DGDR ConfigMap cleanup, foreground DGD
+deletion, per-node GPU handling in the DGD builder, Kimi K2.5 tokenization,
+stream metadata preservation, per-WorkerSet MDC checksum validation, and
+guided-decoding input bounds.
+
+Do not rely on `--reuse-values` for a `0.8.1 -> 1.0.2` upgrade. Several Helm
 keys moved in `1.0.x`, so the explicit flags below preserve the existing
 behavior.
 
@@ -36,7 +44,7 @@ Set the target release details first:
 
 export NAMESPACE=dynamo-system
 export RELEASE_NAME=dynamo-platform
-export RELEASE_VERSION=1.0.1
+export RELEASE_VERSION=1.0.2
 export CHART_URL="https://helm.ngc.nvidia.com/nvidia/ai-dynamo/charts/dynamo-platform-${RELEASE_VERSION}.tgz"
 ```
 
@@ -75,7 +83,7 @@ kubectl get crd | grep -i dynamo
 
 ---
 
-## Fetch the v1.0.1 chart
+## Fetch the v1.0.2 chart
 
 ```bash
 helm pull "$CHART_URL" -d /tmp
@@ -131,7 +139,7 @@ helm upgrade --install "$RELEASE_NAME" /tmp/dynamo-platform-${RELEASE_VERSION}.t
 
 ---
 
-## Install or upgrade Dynamo to v1.0.1
+## Install or upgrade Dynamo to v1.0.2
 
 ```bash
 helm upgrade --install "$RELEASE_NAME" /tmp/dynamo-platform-${RELEASE_VERSION}.tgz \

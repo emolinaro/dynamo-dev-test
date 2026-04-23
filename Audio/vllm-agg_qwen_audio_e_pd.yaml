@@ -32,7 +32,7 @@ spec:
       replicas: 1
       extraPodSpec:
         mainContainer:
-          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.2
 
     # 1) Processor (Python) - HTTP entry, tokenization, routes to encoder
     Processor:
@@ -50,7 +50,7 @@ spec:
         nodeSelector:
           ucloud.dk/gpu: "true"
         mainContainer:
-          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.2
           workingDir: /workspace/examples/multimodal
           command:
             - /bin/sh
@@ -78,7 +78,7 @@ spec:
         nodeSelector:
           ucloud.dk/gpu: "true"
         mainContainer:
-          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.2
           workingDir: /workspace/examples/multimodal
           command:
             - /bin/sh
@@ -106,7 +106,7 @@ spec:
         nodeSelector:
           ucloud.dk/gpu: "true"
         mainContainer:
-          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.1
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.2
           workingDir: /workspace/examples/multimodal
           command:
             - /bin/sh

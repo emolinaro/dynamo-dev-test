@@ -16,7 +16,7 @@ spec:
       replicas: 1
       extraPodSpec:
         mainContainer:
-          image: nvcr.io/nvidia/ai-dynamo/sglang-runtime:1.0.1
+          image: nvcr.io/nvidia/ai-dynamo/sglang-runtime:1.0.2
     SGLangImageWorker:
       envFromSecret: hf-token-secret
       componentType: worker
@@ -32,7 +32,7 @@ spec:
         nodeSelector:
           ucloud.dk/gpu: "true"
         mainContainer:
-          image: nvcr.io/nvidia/ai-dynamo/sglang-runtime:1.0.1
+          image: nvcr.io/nvidia/ai-dynamo/sglang-runtime:1.0.2
           workingDir: /workspace/examples/backends/sglang
           command:
             - python3

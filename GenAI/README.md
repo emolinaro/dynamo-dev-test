@@ -33,10 +33,10 @@ The concrete manifests currently in this repo are:
 
 - Official Dynamo docs for these GenAI workflows are currently split between `latest` and `dev` paths.
 - The commands in each `cmd.txt` are either adapted to the repo-local manifests above or kept as explicit notes where the public docs remain incomplete.
-- `text-to-audio/` is included because you asked for it, but I did not find a first-class, user-facing Dynamo `v1.0.1` text-to-audio generation guide in the official docs used here.
+- `text-to-audio/` is included because you asked for it, but I did not find a first-class, user-facing Dynamo `v1.0.2` text-to-audio generation guide in the official docs used here.
 - First startup for these examples can be slow because models are downloaded from Hugging Face. Transient `429 Too Many Requests` errors are possible and usually require waiting and retrying.
 - For image/video generation examples, the response often contains a `file://` URL to media stored inside the worker pod. The corresponding `cmd.txt` files show how to copy those files out with `kubectl cp`.
-- The `trtllm-video-diffusion/` example is the least portable path here. In practice it may fail on clusters where the GPU node driver stack is older than what the `tensorrtllm-runtime:1.0.1` container expects, even if the cluster can run the vLLM and SGLang examples.
+- The `trtllm-video-diffusion/` example is the least portable path here. In practice it may fail on clusters where the GPU node driver stack is older than what the `tensorrtllm-runtime:1.0.2` container expects, even if the cluster can run the vLLM and SGLang examples.
 
 ## Sources
 
