@@ -1,11 +1,12 @@
 # Deployment Scenarios
 
-Updated against NVIDIA Dynamo documentation and the Dynamo v1.0.2 release notes
-on April 23, 2026. This reflects the current `latest` docs for local install,
+Updated against NVIDIA Dynamo documentation and the Dynamo v1.1.0 release notes
+on May 6, 2026. This reflects the current `latest` docs for local install,
 Kubernetes deployment, operator behavior, and disaggregated serving, plus
 current upstream GAIE install guidance. The runnable `GAIE/` example in this
-repo intentionally keeps its tenant manifests aligned with the Dynamo `v1.0.2`
-aggregated pattern rather than a moving `dev` example set.
+repo intentionally keeps its tenant manifests aligned with the current
+aggregated pattern and `1.1.0` image set rather than a moving `dev` example
+set.
 
 ## Scenario Map
 
@@ -90,15 +91,17 @@ This is not the default recommendation for balanced workloads. The current disag
 - Kubernetes-native service discovery is now the recommended default on Kubernetes; etcd discovery is the legacy or opt-in path there.
 - Local single-machine development is now clearly documented around file discovery first, with Compose-based infra as an optional higher-fidelity setup.
 - The operator now documents three concrete deployment modes: cluster-wide, namespace-scoped, and hybrid.
+- The `v1.1.0` release notes promote Anthropic-compatible `/v1/messages` and add `context_window` metadata on `/v1/models`; some public docs still lag those release-note details, so this repo uses the release notes as the source of truth for endpoint smoke tests.
 - Multinode orchestration is optional and not installed by default with the platform chart; Grove + KAI Scheduler or LWS + Volcano are separate decisions.
 - The current disaggregated guide is much stricter about RDMA being required for good performance and recommends AIConfigurator for deciding between aggregated and disaggregated topologies.
+- The `v1.1.0` release notes remove the old LLaVA-specific multimodal E/P/D path. This repo therefore treats `Video/` as a legacy migration reference instead of a current `1.1.0` validation target.
 - The current GAIE guidance is more specific that support is kGateway-only,
   uses EPP-side routing with `--router-mode direct`, and should be avoided if
   you need LoRA.
 - The current upstream GAIE install guidance moves faster than this repo's
   runnable tenant manifests; cluster-prerequisite links track current upstream
-  docs, while the repo's GAIE manifests stay aligned with the `v1.0.2`
-  aggregated example.
+  docs, while the repo's GAIE manifests stay aligned with the current
+  aggregated example shape and `1.1.0` images.
 
 ## Summary
 

@@ -21,7 +21,7 @@ Repo-local Kubernetes manifests now exist for the models listed in `cmd.txt`:
 
 For vLLM-Omni, `/v1/chat/completions` returns the generated image inline as a base64 `data:image/png` URL. If you want something easier to consume from the shell, prefer `/v1/images/generations` with `"response_format": "url"`, as shown in `cmd.txt`.
 
-For the SGLang FLUX manifest, the runtime here accepts `--media-output-fs-url` rather than the older `--fs-url` wording shown in part of the docs. The manifest is written to match the current `1.0.2` container behavior.
+For the SGLang FLUX manifest, the runtime here accepts `--media-output-fs-url` rather than the older `--fs-url` wording shown in part of the docs. The manifest is written to match the current `1.1.0` container behavior.
 
 ## Sources
 

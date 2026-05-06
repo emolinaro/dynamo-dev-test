@@ -1,3 +1,6 @@
+# Dynamo v1.1.0 text smoke test.
+# For the full API matrix, keep the port-forward below open and then run ../API_TESTING.md too.
+
 kubectl apply -f vllm-agg.yaml
 
 kubectl -n dynamo-system get dynamographdeployment vllm-agg
@@ -13,5 +16,31 @@ curl -s http://127.0.0.1:8000/v1/chat/completions \
     "messages": [{"role":"user","content":"Say hello in one short sentence."}],
     "temperature": 0.2,
     "max_tokens": 64
+  }' | head -c 2000
+echo
+
+curl -s http://127.0.0.1:8000/v1/responses \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "Qwen/Qwen3-0.6B",
+    "input": "Say hello in one short sentence.",
+    "max_output_tokens": 64
+  }' | head -c 2000
+echo
+
+curl -s http://127.0.0.1:8000/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "anthropic-version: 2023-06-01" \
+  -d '{
+    "model": "Qwen/Qwen3-0.6B",
+    "max_tokens": 64,
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          { "type": "text", "text": "Say hello in one short sentence." }
+        ]
+      }
+    ]
   }' | head -c 2000
 echo

@@ -6,7 +6,7 @@ metadata:
 spec:
   model: Qwen/Qwen3-0.6B
   backend: vllm
-  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.2
+  image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.1.0
   searchStrategy: thorough
   autoApply: true
   workload:
@@ -34,7 +34,7 @@ spec:
             replicas: 1
             extraPodSpec:
               mainContainer:
-                image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.2
+                image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.1.0
           VllmDecodeWorker:
             envFromSecret: hf-token-secret
             componentType: worker
@@ -50,7 +50,7 @@ spec:
               nodeSelector:
                 ucloud.dk/gpu: "true"
               mainContainer:
-                image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.2
+                image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.1.0
                 workingDir: /workspace/examples/backends/vllm
                 command:
                 - python3
@@ -78,7 +78,7 @@ spec:
               nodeSelector:
                 ucloud.dk/gpu: "true"
               mainContainer:
-                image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.2
+                image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.1.0
                 workingDir: /workspace/examples/backends/vllm
                 command:
                 - python3

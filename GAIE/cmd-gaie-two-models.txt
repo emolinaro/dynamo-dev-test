@@ -34,8 +34,8 @@ export GAIE_HTTP_ROUTE_MODEL_A=${GAIE_HTTP_ROUTE_MODEL_A:-gp-gaie-model-a-route}
 export GAIE_HTTP_ROUTE_MODEL_B=${GAIE_HTTP_ROUTE_MODEL_B:-gp-gaie-model-b-route}
 export GAIE_HOST_MODEL_A=${GAIE_HOST_MODEL_A:-gp-gaie-model-a.example.com}
 export GAIE_HOST_MODEL_B=${GAIE_HOST_MODEL_B:-gp-gaie-model-b.example.com}
-export DYNAMO_VLLM_IMAGE=${DYNAMO_VLLM_IMAGE:-nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.2}
-export DYNAMO_EPP_IMAGE=${DYNAMO_EPP_IMAGE:-nvcr.io/nvidia/ai-dynamo/dynamo-frontend:1.0.2}
+export DYNAMO_VLLM_IMAGE=${DYNAMO_VLLM_IMAGE:-nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.1.0}
+export DYNAMO_EPP_IMAGE=${DYNAMO_EPP_IMAGE:-nvcr.io/nvidia/ai-dynamo/dynamo-frontend:1.1.0}
 export MODEL_A=${MODEL_A:-meta-llama/Llama-3.2-3B-Instruct}
 export MODEL_B=${MODEL_B:-Qwen/Qwen2.5-7B-Instruct}
 export DYN_KV_CACHE_BLOCK_SIZE=${DYN_KV_CACHE_BLOCK_SIZE:-128}
@@ -136,6 +136,14 @@ kubectl -n "$K8S_NAMESPACE" get httproute
 #   -H "Host: $GAIE_HOST_MODEL_B" \
 #   -H "Content-Type: application/json" \
 #   -d "{\"model\":\"${MODEL_B}\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hello in one short sentence.\"}],\"max_tokens\":64,\"temperature\":0.2}"
+#
+# curl -sS "$GATEWAY_URL/v1/responses" \
+#   -H "Host: $GAIE_HOST_MODEL_A" \
+#   -H "Content-Type: application/json" \
+#   -d "{\"model\":\"${MODEL_A}\",\"input\":\"Say hello in one short sentence.\",\"max_output_tokens\":64}"
+#
+# See ../API_TESTING.md for the full v1.1.0 text API smoke-test matrix,
+# including /v1/messages.
 
 # 7) Safe teardown
 # kubectl delete namespace "$K8S_NAMESPACE"

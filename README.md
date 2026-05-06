@@ -5,16 +5,23 @@ Kubernetes manifests and quick commands for deploying **NVIDIA AI Dynamo** graph
 - Text (Qwen3)
 - Image/Vision (LLaVA 1.5, Qwen2.5-VL)
 - Audio (Qwen2-Audio)
-- Video (LLaVA-NeXT-Video)
+- Video (legacy LLaVA-NeXT-Video E/P/D reference)
 - Profiler: SLA profiling examples for rapid and thorough DGDR (DynamoGraphDeploymentRequest) runs against Qwen3-0.6B — **runs only with disaggregated** (decode + prefill) deployments
 - GlobalPlanner: shared-GPU-budget global-planner example
 - GAIE: tenant-scoped Gateway API Inference Extension example for the same two models, designed to live in a removable namespace
 - GenAI: repo-local generation examples adapted from the current Dynamo docs across vLLM-Omni, SGLang, and experimental TensorRT-LLM paths
+- API smoke tests: OpenAI-compatible and Anthropic-compatible checks for `/v1/models`, `/v1/chat/completions`, `/v1/responses`, and `/v1/messages`
+
+This repo is refreshed for Dynamo `v1.1.0` (released May 4, 2026), with one
+intentional exception: the `Video/` folder is kept as a legacy pre-`1.1.0`
+reference because the `v1.1.0` release notes remove the old LLaVA-specific
+multimodal E/P/D path.
 
 Each example family lives in its own folder and includes:
 
 - A command helper file (`cmd.txt` or `cmd-*.txt`) with a minimal deploy + test flow
 - One or more `DynamoGraphDeployment` YAML manifests where the public docs provide a stable path
+- Shared API checks in [API_TESTING.md](API_TESTING.md)
 
 **This repository mainly targets the first scenario below** (Kubernetes + Dynamo
 operator + DGD), and it also includes a `GAIE/` example for the second
@@ -57,7 +64,7 @@ Compose, K8s operator-managed, disaggregated RDMA, and GAIE/kGateway, see
   - `cmd.txt`: deploy + sample video chat request
 - `Profiler/`
   - Profiler runs **only with disaggregated** deployments (decode + prefill); aggregated graphs are not profiled.
-  - `disagg.yaml`: disaggregated vLLM graph (Frontend + decode + prefill workers) updated to `vllm-runtime:1.0.2`
+  - `disagg.yaml`: disaggregated vLLM graph (Frontend + decode + prefill workers) updated to `vllm-runtime:1.1.0`
   - `profile_sla_aic_dgdr.yaml`: `nvidia.com/v1beta1` DGDR using `searchStrategy: rapid`
   - `profile_sla_online_dgdr.yaml`: `nvidia.com/v1beta1` DGDR using `searchStrategy: thorough`
   - `cmd.txt`: apply DGDR, watch request state, tail profiler job logs, and inspect the generated DGD
@@ -85,6 +92,8 @@ Compose, K8s operator-managed, disaggregated RDMA, and GAIE/kGateway, see
     - `trtllm-agg_wan_t2v.yaml`: experimental TensorRT-LLM video diffusion example
   - `text-to-audio/`
     - placeholder only; no first-class Dynamo text-to-audio guide was found in the current public docs
+- `API_TESTING.md`
+  - text-first smoke tests for the `v1.1.0` frontend API surface
 
 ## Prerequisites
 
@@ -94,13 +103,15 @@ Compose, K8s operator-managed, disaggregated RDMA, and GAIE/kGateway, see
 - A Hugging Face token Kubernetes secret referenced by the manifests:
   - `hf-token-secret`
 
-> **Install instructions:** **INSTALL_INSTRUCTIONS.md** covers both fresh install and platform upgrade to Dynamo `v1.0.2` for the **Kubernetes + Dynamo operator + DGD** scenario, including the Helm value changes needed to upgrade an older `0.8.1` deployment safely, post-upgrade checks, and rollback steps. Run that flow before applying the manifests in this repo.
+> **Install instructions:** **INSTALL_INSTRUCTIONS.md** covers both fresh install and platform upgrade to Dynamo `v1.1.0` for the **Kubernetes + Dynamo operator + DGD** scenario, including the Helm value changes needed to upgrade an older `0.8.1` deployment safely, post-upgrade checks, rollback steps, and the follow-up API smoke tests in `API_TESTING.md`. Run that flow before applying the manifests in this repo.
 
 > Note: Some multimodal examples prefer TCP request plane to avoid payload limits (see the image LLaVA manifest comments and `DYN_REQUEST_PLANE` usage).
 >
 > If UCX / RDMA is not available in tested environment (for example, `nixl` cannot find RDMA devices), you can safely fall back to **TCP-only UCX** by setting the UCX-related env vars in the manifests (as shown in the Qwen vision/audio/video examples) so that UCX uses `tcp` instead of attempting RDMA transports.
 >
 > GenAI note: first startup can be slow because models are downloaded from Hugging Face, and transient `429 Too Many Requests` errors are possible. The `trtllm-video-diffusion/` example is also more sensitive to host GPU driver compatibility than the vLLM and SGLang examples.
+>
+> Release-note caveat: Dynamo `v1.1.0` removes the old LLaVA-specific multimodal E/P/D path. The `Video/` folder is therefore preserved as a last-known `1.0.x` reference rather than a current `1.1.0` validation target.
 
 ## Quick start
 
@@ -129,3 +140,7 @@ curl -s http://127.0.0.1:8000/v1/chat/completions \
   }' | head -c 2000
 echo
 ```
+
+For the newer `v1.1.0` endpoint surface, keep the same port-forward open and run
+the additional `/v1/responses` and `/v1/messages` checks from
+[API_TESTING.md](API_TESTING.md).

@@ -1,11 +1,12 @@
-# Profiler workflow for Dynamo 1.0.2 DGDRs
+# Profiler workflow for Dynamo 1.1.0 DGDRs
 # The profiler runs only with disaggregated deployments (decode + prefill).
 # The DGDR examples already embed the base disaggregated DGD under spec.overrides.dgd.
-# Prerequisites: Dynamo 1.0.2 installed, hf-token-secret in namespace, GPU nodes
+# Prerequisites: Dynamo 1.1.0 installed, hf-token-secret in namespace, GPU nodes
 #
-# Note: In the current Dynamo 1.0.2 docs/runtime, vLLM rapid/AIC profiling is not
-# reliable. Use the thorough online path for vLLM. Keep the rapid manifest only as a
-# reference while NVIDIA resolves the rapid-path support gap.
+# Note: The v1.1.0 release notes improve AIConfigurator-related flows, but this
+# repo still takes the conservative path for vLLM: use the thorough online path
+# first, and keep the rapid manifest as reference-only until you verify it in
+# your own cluster/runtime.
 #
 # Important for 1-node / 4-GPU clusters: hardware.totalGpus=4 constrains the final
 # selected deployment budget, but thorough profiling still benchmarks standalone
@@ -15,7 +16,7 @@
 export NAMESPACE=dynamo-system
 
 # 1) Submit a profiling request
-# Recommended for vLLM on Dynamo 1.0.2: thorough online sweep on real GPUs
+# Recommended for vLLM on Dynamo 1.1.0: thorough online sweep on real GPUs
 kubectl apply -f profile_sla_online_dgdr.yaml
 #
 # Optional reference only: rapid/AIC path

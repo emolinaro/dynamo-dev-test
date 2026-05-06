@@ -1,6 +1,6 @@
 # Dynamo Install / Upgrade Instructions
 
-This document installs Dynamo `v1.0.2` on a fresh cluster or upgrades an
+This document installs Dynamo `v1.1.0` on a fresh cluster or upgrades an
 existing `dynamo-platform` release, including the `0.8.1` layout that this repo
 originally documented.
 
@@ -13,15 +13,21 @@ The commands below preserve the current repo topology:
 - `csi-rbd-sc` storage class for etcd and NATS JetStream
 - Prometheus endpoint at `http://prometheus-server.monitoring.svc.cluster.local`
 
-Dynamo `v1.0.2` is a patch release over `v1.0.1`, so this repo does not need a
-new manifest shape for the default examples. The main deployment change here is
-to pin the platform chart and all example runtime images to `1.0.2`. The release
-also improves DGDR-generated DGD naming, DGDR ConfigMap cleanup, foreground DGD
-deletion, per-node GPU handling in the DGD builder, Kimi K2.5 tokenization,
-stream metadata preservation, per-WorkerSet MDC checksum validation, and
-guided-decoding input bounds.
+Dynamo `v1.1.0` was released on May 4, 2026. For this repo, the release changes
+that matter most are:
 
-Do not rely on `--reuse-values` for a `0.8.1 -> 1.0.2` upgrade. Several Helm
+- the platform chart and current runtime image tags move to `1.1.0`
+- the frontend smoke-test surface now includes `/v1/responses` and
+  Anthropic-compatible `/v1/messages` (currently marked experimental in the
+  frontend docs)
+- `/v1/models` can now expose `context_window` metadata when the backend
+  reports it
+- vLLM no longer auto-enables KV events, so any local or manual bring-up flow
+  should keep those flags explicit
+- the old LLaVA-specific multimodal E/P/D path is removed upstream, so this repo
+  keeps `Video/` as a legacy pre-`1.1.0` reference until it is migrated
+
+Do not rely on `--reuse-values` for a `0.8.1 -> 1.1.0` upgrade. Several Helm
 keys moved in `1.0.x`, so the explicit flags below preserve the existing
 behavior.
 
@@ -44,7 +50,7 @@ Set the target release details first:
 
 export NAMESPACE=dynamo-system
 export RELEASE_NAME=dynamo-platform
-export RELEASE_VERSION=1.0.2
+export RELEASE_VERSION=1.1.0
 export CHART_URL="https://helm.ngc.nvidia.com/nvidia/ai-dynamo/charts/dynamo-platform-${RELEASE_VERSION}.tgz"
 ```
 
@@ -53,9 +59,9 @@ Create or update the Hugging Face token secret:
 ```bash
 kubectl create ns "$NAMESPACE" 2>/dev/null || true
 
-kubectl create secret generic hf-token-secret \
+kubectl -n "$NAMESPACE" create secret generic hf-token-secret \
   --from-literal=HF_TOKEN=<insert_huggingface_token> \
-  --dry-run=client -o yaml | kubectl apply -f -
+  --dry-run=client -o yaml | kubectl apply -n "$NAMESPACE" -f -
 ```
 
 Check nodes with GPUs:
@@ -83,7 +89,7 @@ kubectl get crd | grep -i dynamo
 
 ---
 
-## Fetch the v1.0.2 chart
+## Fetch the v1.1.0 chart
 
 ```bash
 helm pull "$CHART_URL" -d /tmp
@@ -139,7 +145,7 @@ helm upgrade --install "$RELEASE_NAME" /tmp/dynamo-platform-${RELEASE_VERSION}.t
 
 ---
 
-## Install or upgrade Dynamo to v1.0.2
+## Install or upgrade Dynamo to v1.1.0
 
 ```bash
 helm upgrade --install "$RELEASE_NAME" /tmp/dynamo-platform-${RELEASE_VERSION}.tgz \
@@ -191,6 +197,28 @@ objects in the cluster, re-check them after the platform is healthy:
 kubectl -n "$NAMESPACE" get dynamographdeployments,dynamographdeploymentrequests
 ```
 
+## Post-upgrade API smoke tests
+
+Once the platform is healthy, deploy a known text example and verify the
+`v1.1.0` frontend API surface:
+
+```bash
+cd Text
+kubectl apply -f vllm-agg.yaml
+kubectl -n "$NAMESPACE" get dynamographdeployment vllm-agg
+kubectl -n "$NAMESPACE" port-forward svc/vllm-agg-frontend 8000:8000
+```
+
+Then, in another terminal:
+
+```bash
+export BASE_URL=http://127.0.0.1:8000
+export MODEL=Qwen/Qwen3-0.6B
+```
+
+Run the `/v1/models`, `/v1/chat/completions`, `/v1/responses`, and
+`/v1/messages` checks from [API_TESTING.md](API_TESTING.md).
+
 If you are recovering from a failed rollout where the operator is stuck in
 `Init:CrashLoopBackOff`, the usual reason is the `crd-apply` init container
 trying to create a new CRD without cluster-scope permissions. In that case:
@@ -238,10 +266,10 @@ helm uninstall "$RELEASE_NAME" -n "$NAMESPACE"
 
 ## Important follow-up for this repository
 
-Upgrading the platform does not automatically update the example graph manifests
-in this repo. The examples pin their own runtime images independently of the
-platform install, so you should still verify the image tags you want before
-reapplying them after an upgrade.
+Upgrading the platform does not automatically update every example graph manifest
+in this repo. Most runnable examples here are refreshed to `1.1.0`, but the
+legacy `Video/` LLaVA E/P/D reference intentionally stays on its last-known
+`1.0.x` image set until that workflow is migrated.
 
 If you later need Grove for multinode orchestration, install or enable it
 separately after the platform upgrade instead of bundling it into this default

@@ -4,6 +4,10 @@ metadata:
   namespace: dynamo-system
   name: vllm-agg-llava-video
 spec:
+  # Legacy pre-v1.1.0 reference only.
+  # Dynamo v1.1.0 removes the old LLaVA-specific multimodal E/P/D path, so this
+  # manifest intentionally stays on its last-known 1.0.x image set until it is
+  # migrated to a supported multimodal flow.
   envs:
   - name: UCX_TLS
     value: "tcp,cuda_copy,cuda_ipc"

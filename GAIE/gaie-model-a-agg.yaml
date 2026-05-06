@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # GAIE DynamoGraphDeployment for MODEL_A (aggregated decode worker), aligned
-# with the v1.0.2 upstream aggregated example:
-# https://github.com/ai-dynamo/dynamo/blob/v1.0.2/examples/backends/vllm/deploy/gaie/agg.yaml
+# with the release-aligned upstream aggregated example in v1.1.0:
+# https://github.com/ai-dynamo/dynamo/blob/v1.1.0/examples/backends/vllm/deploy/gaie/agg.yaml
 #
 # Render: envsubst < gaie-model-a-agg.yaml | kubectl apply -f -
 # InferencePool name is ${GAIE_DGD_MODEL_A}-pool (operator default).
